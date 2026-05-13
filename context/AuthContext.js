@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useMemo } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import * as ExpoLinking from 'expo-linking';
 import { Alert, Linking } from 'react-native';
 import { createApiClient } from '../api/client';
 import { API_BASE_URL } from '../config/env';
@@ -16,6 +17,12 @@ export const AuthProvider = ({ children }) => {
 
   const axiosInstance = useMemo(() => createApiClient(authToken), [authToken]);
 
+  const openSpotifyAuth = async (email) => {
+    const returnUrl = ExpoLinking.createURL('login');
+    const authSpotifyUrl = `${API_BASE_URL}/auth/spotify?state=${encodeURIComponent(email)}&return_url=${encodeURIComponent(returnUrl)}`;
+    await Linking.openURL(authSpotifyUrl);
+  };
+
   // Función para iniciar sesión
   const login = async (email, password) => {
     try {
@@ -25,8 +32,7 @@ export const AuthProvider = ({ children }) => {
       });
       const { user: userData } = response.data;
 
-      const authSpotifyUrl = `${API_BASE_URL}/auth/spotify?state=${encodeURIComponent(userData.email)}`;
-      await Linking.openURL(authSpotifyUrl);
+      await openSpotifyAuth(userData.email);
     } catch (error) {
       throw new Error(error.response?.data?.message || 'Error al iniciar sesión');
     }
@@ -42,8 +48,7 @@ export const AuthProvider = ({ children }) => {
       });
       const { user: userData } = response.data;
 
-      const authSpotifyUrl = `${API_BASE_URL}/auth/spotify?state=${encodeURIComponent(userData.email)}`;
-      await Linking.openURL(authSpotifyUrl);
+      await openSpotifyAuth(userData.email);
     } catch (error) {
       throw new Error(error.response?.data?.message || 'Error al registrar usuario');
     }
