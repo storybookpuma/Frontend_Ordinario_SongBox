@@ -12,17 +12,38 @@ const MenuBar = () => {
   const route = useRoute();
   const [barWidth, setBarWidth] = useState(0);
   const activeIndexAnim = useRef(new Animated.Value(Math.max(TABS.indexOf(route.name), 0))).current;
+  const thumbPulseAnim = useRef(new Animated.Value(0)).current;
   const itemWidth = barWidth > 0 ? (barWidth - 24) / TABS.length : 0;
 
   useEffect(() => {
     const activeIndex = Math.max(TABS.indexOf(route.name), 0);
-    Animated.spring(activeIndexAnim, {
-      toValue: activeIndex,
-      useNativeDriver: true,
-      tension: 190,
-      friction: 18,
-    }).start();
-  }, [activeIndexAnim, route.name]);
+    thumbPulseAnim.setValue(0);
+
+    Animated.parallel([
+      Animated.spring(activeIndexAnim, {
+        toValue: activeIndex,
+        useNativeDriver: true,
+        stiffness: 210,
+        damping: 24,
+        mass: 0.85,
+        overshootClamping: false,
+      }),
+      Animated.sequence([
+        Animated.timing(thumbPulseAnim, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.spring(thumbPulseAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          stiffness: 180,
+          damping: 17,
+          mass: 0.8,
+        }),
+      ]),
+    ]).start();
+  }, [activeIndexAnim, route.name, thumbPulseAnim]);
 
   // Función para determinar si una pestaña está activa
   const getIconColor = (tab) => (route.name === tab ? '#FFFFFF' : 'rgba(255,255,255,0.72)');
@@ -52,6 +73,48 @@ const MenuBar = () => {
     outputRange: [0, itemWidth, itemWidth * 2],
   });
 
+  const thumbScaleX = thumbPulseAnim.interpolate({
+    inputRange: [0, 0.55, 1],
+    outputRange: [1, 1.18, 0.96],
+  });
+
+  const thumbScaleY = thumbPulseAnim.interpolate({
+    inputRange: [0, 0.55, 1],
+    outputRange: [1, 0.94, 1.05],
+  });
+
+  const thumbGlowOpacity = thumbPulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.22, 0.5],
+  });
+
+  const getTabAnimatedStyle = (tabIndex) => {
+    const inputRange = TABS.map((_, index) => index);
+    return {
+      transform: [
+        {
+          scale: activeIndexAnim.interpolate({
+            inputRange,
+            outputRange: inputRange.map((index) => (index === tabIndex ? 1.08 : 0.92)),
+            extrapolate: 'clamp',
+          }),
+        },
+        {
+          translateY: activeIndexAnim.interpolate({
+            inputRange,
+            outputRange: inputRange.map((index) => (index === tabIndex ? -2 : 2)),
+            extrapolate: 'clamp',
+          }),
+        },
+      ],
+      opacity: activeIndexAnim.interpolate({
+        inputRange,
+        outputRange: inputRange.map((index) => (index === tabIndex ? 1 : 0.72)),
+        extrapolate: 'clamp',
+      }),
+    };
+  };
+
   return (
     <View style={styles.menuShell} pointerEvents="box-none" {...panResponder.panHandlers}>
       <BlurView intensity={Platform.OS === 'ios' ? 55 : 35} tint="dark" style={styles.menuBar}>
@@ -71,16 +134,22 @@ const MenuBar = () => {
                 styles.liquidThumb,
                 {
                   width: itemWidth,
-                  transform: [{ translateX: activeTranslateX }],
+                  transform: [
+                    { translateX: activeTranslateX },
+                    { scaleX: thumbScaleX },
+                    { scaleY: thumbScaleY },
+                  ],
                 },
               ]}
             >
+              <Animated.View style={[styles.liquidGlow, { opacity: thumbGlowOpacity }]} />
               <LinearGradient
-                colors={['rgba(255,255,255,0.42)', 'rgba(188,119,255,0.30)', 'rgba(255,255,255,0.10)']}
+                colors={['rgba(255,255,255,0.56)', 'rgba(163,95,255,0.36)', 'rgba(255,255,255,0.12)']}
                 start={{ x: 0.1, y: 0 }}
                 end={{ x: 0.95, y: 1 }}
                 style={styles.liquidThumbGradient}
               />
+              <View style={styles.thumbHighlight} />
             </Animated.View>
           ) : null}
           <Pressable
@@ -90,8 +159,10 @@ const MenuBar = () => {
             accessibilityLabel="Home"
             accessibilityState={{ selected: route.name === 'HomeScreen' }}
           >
-            <Icon name="home" size={22} color={getIconColor('HomeScreen')} />
-            <Text style={[styles.menuText, { color: getIconColor('HomeScreen') }]}>Home</Text>
+            <Animated.View style={[styles.menuItemContent, getTabAnimatedStyle(0)]}>
+              <Icon name="home" size={23} color={getIconColor('HomeScreen')} />
+              <Text style={[styles.menuText, { color: getIconColor('HomeScreen') }]}>Home</Text>
+            </Animated.View>
           </Pressable>
 
           <Pressable
@@ -101,8 +172,10 @@ const MenuBar = () => {
             accessibilityLabel="Search"
             accessibilityState={{ selected: route.name === 'SearchScreen' }}
           >
-            <Icon name="search" size={22} color={getIconColor('SearchScreen')} />
-            <Text style={[styles.menuText, { color: getIconColor('SearchScreen') }]}>Search</Text>
+            <Animated.View style={[styles.menuItemContent, getTabAnimatedStyle(1)]}>
+              <Icon name="search" size={23} color={getIconColor('SearchScreen')} />
+              <Text style={[styles.menuText, { color: getIconColor('SearchScreen') }]}>Search</Text>
+            </Animated.View>
           </Pressable>
 
           <Pressable
@@ -112,8 +185,10 @@ const MenuBar = () => {
             accessibilityLabel="Profile"
             accessibilityState={{ selected: route.name === 'ProfileScreen' }}
           >
-            <Icon name="user" size={22} color={getIconColor('ProfileScreen')} />
-            <Text style={[styles.menuText, { color: getIconColor('ProfileScreen') }]}>Profile</Text>
+            <Animated.View style={[styles.menuItemContent, getTabAnimatedStyle(2)]}>
+              <Icon name="user" size={23} color={getIconColor('ProfileScreen')} />
+              <Text style={[styles.menuText, { color: getIconColor('ProfileScreen') }]}>Profile</Text>
+            </Animated.View>
           </Pressable>
         </LinearGradient>
       </BlurView>
@@ -128,7 +203,7 @@ const styles = StyleSheet.create({
     right: 18,
     bottom: Platform.OS === 'ios' ? 28 : 18,
     zIndex: 999,
-    borderRadius: 34,
+    borderRadius: 36,
     shadowColor: '#A071CA',
     shadowOffset: { width: 0, height: 18 },
     shadowOpacity: 0.28,
@@ -136,12 +211,12 @@ const styles = StyleSheet.create({
     elevation: 18,
   },
   menuBar: {
-    height: 72,
-    borderRadius: 34,
+    height: 74,
+    borderRadius: 36,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(224,197,255,0.36)',
-    backgroundColor: 'rgba(47,28,68,0.56)',
+    borderColor: 'rgba(224,197,255,0.32)',
+    backgroundColor: 'rgba(28,20,38,0.58)',
   },
   glassOverlay: {
     flex: 1,
@@ -154,20 +229,38 @@ const styles = StyleSheet.create({
   liquidThumb: {
     position: 'absolute',
     left: 12,
-    top: 9,
-    bottom: 9,
-    borderRadius: 28,
+    top: 8,
+    bottom: 8,
+    borderRadius: 30,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.26)',
+    borderColor: 'rgba(255,255,255,0.32)',
     shadowColor: '#D8B4FE',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.28,
-    shadowRadius: 16,
+    shadowOpacity: 0.38,
+    shadowRadius: 20,
+  },
+  liquidGlow: {
+    position: 'absolute',
+    left: -16,
+    right: -16,
+    top: -12,
+    bottom: -12,
+    borderRadius: 40,
+    backgroundColor: 'rgba(190,124,255,0.48)',
   },
   liquidThumbGradient: {
     flex: 1,
     backgroundColor: 'rgba(168,85,247,0.22)',
+  },
+  thumbHighlight: {
+    position: 'absolute',
+    top: 8,
+    left: 16,
+    right: 18,
+    height: 1,
+    borderRadius: 1,
+    backgroundColor: 'rgba(255,255,255,0.58)',
   },
   menuItem: {
     alignItems: 'center',
@@ -176,6 +269,10 @@ const styles = StyleSheet.create({
     height: 54,
     borderRadius: 27,
     zIndex: 2,
+  },
+  menuItemContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   menuText: {
     fontSize: 11,
