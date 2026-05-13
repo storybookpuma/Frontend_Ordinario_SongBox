@@ -5,13 +5,13 @@ import {
   StyleSheet, 
   Image, 
   TouchableOpacity, 
-  Dimensions,
   Animated,
   ActivityIndicator,
   Alert,
   TouchableWithoutFeedback,
   Keyboard,
   TextInput,
+  useWindowDimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useNavigation } from '@react-navigation/native';
@@ -22,10 +22,9 @@ import StarRating from '../components/StarRating';
 import { AuthContext } from '../context/AuthContext';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
-const { height: screenHeight } = Dimensions.get('window');
-
 const AlbumDetailsScreen = ({ route }) => {
   const navigation = useNavigation();
+  const { height: screenHeight } = useWindowDimensions();
   const scrollY = useRef(new Animated.Value(0)).current;
   const { axiosInstance, user } = useContext(AuthContext);
 
@@ -59,8 +58,6 @@ const AlbumDetailsScreen = ({ route }) => {
             cacheBust: new Date().getTime()
           },
         });
-
-        console.log('Respuesta del backend:', response.data); 
 
         setAlbumData(response.data.album);
         setAverageRating(response.data.album.averageRating || 0);
@@ -196,8 +193,6 @@ const AlbumDetailsScreen = ({ route }) => {
         comment_text: newComment,
       });
 
-      console.log("Comentario agregado:", response.data.comment);
-
       const updatedComments = sortComments([response.data.comment, ...comments]);
       setComments(updatedComments);
       setNewComment('');
@@ -247,7 +242,7 @@ const AlbumDetailsScreen = ({ route }) => {
           {/* Imagen del álbum con efecto de escala */}
           <Animated.View style={[
             styles.albumImageContainer,
-            { transform: [{ scale: imageScale }] }
+            { height: screenHeight * 0.5, transform: [{ scale: imageScale }] }
           ]}>
             {loadingAlbumImage && (
               <ActivityIndicator size="large" color="#A071CA" style={styles.albumImageLoader} />
@@ -390,7 +385,6 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   albumImageContainer: { 
-    height: screenHeight * 0.5,
     width: '100%',
     marginTop: -50,
   },

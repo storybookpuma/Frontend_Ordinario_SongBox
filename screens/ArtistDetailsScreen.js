@@ -8,13 +8,13 @@ import {
   Image, 
   ScrollView, 
   TouchableOpacity, 
-  Dimensions,
   Animated,
   ActivityIndicator,
   Alert,
   TextInput,
   TouchableWithoutFeedback,
   Keyboard,
+  useWindowDimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useNavigation } from '@react-navigation/native';
@@ -24,10 +24,9 @@ import CommentSection from '../components/CommentSection';
 import FavoriteButton from '../components/FavoriteButton';
 import StarRating from '../components/StarRating'; 
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-
 const ArtistDetailsScreen = ({ route }) => {
   const navigation = useNavigation();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const scrollY = useRef(new Animated.Value(0)).current;
   const { axiosInstance, user } = useContext(AuthContext);
 
@@ -58,7 +57,7 @@ const ArtistDetailsScreen = ({ route }) => {
   const renderAlbumCard = (album, index) => (
     <TouchableOpacity
       key={index}
-      style={styles.albumCard}
+      style={[styles.albumCard, { width: screenWidth * 0.5 }]}
       onPress={() => {
         navigation.navigate('AlbumDetailsScreen', {
           album: { id: album.id },
@@ -102,7 +101,6 @@ const ArtistDetailsScreen = ({ route }) => {
           },
         });
 
-        console.log('Respuesta del backend:', response.data); 
         setArtistData(response.data);
 
         setLoadingAlbumImages(new Array(response.data.albums.length).fill(true));
@@ -232,8 +230,6 @@ const ArtistDetailsScreen = ({ route }) => {
         comment_text: newComment,
       });
 
-      console.log("Comentario agregado:", response.data.comment);
-
       const updatedComments = sortComments([response.data.comment, ...comments]);
       setComments(updatedComments);
       setNewComment('');
@@ -279,7 +275,7 @@ const ArtistDetailsScreen = ({ route }) => {
           >
             <Animated.View style={[
               styles.artistImageContainer,
-              { transform: [{ scale: imageScale }] }
+              { height: screenHeight * 0.5, transform: [{ scale: imageScale }] }
             ]}>
               {loadingArtistImage && (
                 <ActivityIndicator size="large" color="#A071CA" style={styles.artistImageLoader} />
@@ -414,7 +410,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   artistImageContainer: {
-    height: screenHeight * 0.5,
     width: '100%',
     marginTop: -50,
   },
@@ -482,7 +477,6 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     padding: 10,
     marginRight: 15,
-    width: screenWidth * 0.5,
     alignItems: 'center',
   },
   albumImage: {

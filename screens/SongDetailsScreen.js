@@ -5,7 +5,6 @@ import {
   StyleSheet, 
   Image, 
   TouchableOpacity, 
-  Dimensions,
   Animated,
   ActivityIndicator,
   Alert,
@@ -13,6 +12,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   TextInput,
+  useWindowDimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useNavigation } from '@react-navigation/native';
@@ -23,10 +23,9 @@ import StarRating from '../components/StarRating';
 import { AuthContext } from '../context/AuthContext';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view'; 
 
-const { height: screenHeight } = Dimensions.get('window');
-
 export default function SongDetailsScreen({ route }) {
   const navigation = useNavigation();
+  const { height: screenHeight } = useWindowDimensions();
   const { axiosInstance, user } = useContext(AuthContext);
   const scrollY = useRef(new Animated.Value(0)).current;
 
@@ -71,8 +70,6 @@ export default function SongDetailsScreen({ route }) {
             cacheBust: new Date().getTime()
           },
         });
-
-        console.log('Song details:', response.data);
 
         setSongData(response.data.song);
         setAverageRating(response.data.song.averageRating || 0);
@@ -212,8 +209,6 @@ export default function SongDetailsScreen({ route }) {
         comment_text: newComment,
       });
 
-      console.log("Comentario agregado:", response.data.comment);
-
       const updatedComments = sortComments([response.data.comment, ...comments]);
       setComments(updatedComments); 
       setNewComment('');
@@ -262,7 +257,7 @@ export default function SongDetailsScreen({ route }) {
           {/* Imagen de la canción con efecto de escala */}
           <Animated.View style={[
             styles.songImageContainer,
-            { transform: [{ scale: imageScale }] }
+            { height: screenHeight * 0.5, transform: [{ scale: imageScale }] }
           ]}>
             {loadingSongImage && (
               <ActivityIndicator size="large" color="#A071CA" style={styles.songImageLoader} />
@@ -433,7 +428,6 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   songImageContainer: {
-    height: screenHeight * 0.5,
     width: '100%',
     marginTop: -50,
   },

@@ -52,6 +52,8 @@ export default function SignInScreen() {
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => navigation.goBack()}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
       >
         <Text style={styles.backButtonText}>{"<"}</Text>
       </TouchableOpacity>
@@ -72,6 +74,7 @@ export default function SignInScreen() {
           autoCorrect={false}
           autoComplete="email"
           textContentType="emailAddress"
+          accessibilityLabel="Email"
           returnKeyType="next"
           value={email}
           onChangeText={setEmail}
@@ -87,12 +90,20 @@ export default function SignInScreen() {
           autoCorrect={false}
           autoComplete="password"
           textContentType="password"
+          accessibilityLabel="Password"
           returnKeyType="done"
           value={password}
           onChangeText={setPassword}
         />
 
-        <TouchableOpacity style={styles.signInButton} onPress={handleLogin} disabled={isLoading}>
+        <TouchableOpacity
+          style={styles.signInButton}
+          onPress={handleLogin}
+          disabled={isLoading}
+          accessibilityRole="button"
+          accessibilityLabel="Sign in"
+          accessibilityState={{ disabled: isLoading }}
+        >
           {isLoading ? (
             <ActivityIndicator color="#FFF" />
           ) : (
@@ -103,7 +114,11 @@ export default function SignInScreen() {
         {statusMessage ? <Text style={styles.statusText}>{statusMessage}</Text> : null}
 
         {/* Enlace para registrarse */}
-        <TouchableOpacity onPress={() => navigation.navigate('RegisterScreen')}>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('RegisterScreen')}
+          accessibilityRole="link"
+          accessibilityLabel="Create an account"
+        >
           <Text style={styles.registerText}>¿No tienes una cuenta? Regístrate</Text>
         </TouchableOpacity>
       </KeyboardAvoidingView>

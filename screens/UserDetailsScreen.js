@@ -87,8 +87,6 @@ export default function UserDetailsScreen({ route, navigation }) {
         comment_text: newComment,
       });
 
-      console.log("Comentario agregado:", response.data.comment);
-
       const updatedComments = [response.data.comment, ...comments];
       setComments(updatedComments);
       setNewComment('');

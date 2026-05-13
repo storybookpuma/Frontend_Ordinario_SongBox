@@ -58,6 +58,8 @@ export default function RegisterScreen() {
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => navigation.goBack()}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
       >
         <Text style={styles.backButtonText}>{"<"}</Text>
       </TouchableOpacity>
@@ -77,6 +79,7 @@ export default function RegisterScreen() {
           autoCorrect={false}
           autoComplete="username"
           textContentType="username"
+          accessibilityLabel="Username"
           returnKeyType="next"
           value={username}
           onChangeText={setUsername}
@@ -92,6 +95,7 @@ export default function RegisterScreen() {
           autoCorrect={false}
           autoComplete="email"
           textContentType="emailAddress"
+          accessibilityLabel="Email"
           returnKeyType="next"
           value={email}
           onChangeText={setEmail}
@@ -107,6 +111,7 @@ export default function RegisterScreen() {
           autoCorrect={false}
           autoComplete="new-password"
           textContentType="newPassword"
+          accessibilityLabel="Password"
           returnKeyType="next"
           value={password}
           onChangeText={setPassword}
@@ -122,6 +127,7 @@ export default function RegisterScreen() {
           autoCorrect={false}
           autoComplete="new-password"
           textContentType="newPassword"
+          accessibilityLabel="Confirm password"
           returnKeyType="done"
           value={confirmPassword}
           onChangeText={setConfirmPassword}
@@ -131,6 +137,9 @@ export default function RegisterScreen() {
           style={styles.registerButton}
           onPress={handleRegister}
           disabled={isLoading || authIsLoading}
+          accessibilityRole="button"
+          accessibilityLabel="Create account"
+          accessibilityState={{ disabled: isLoading || authIsLoading }}
         >
           {isLoading || authIsLoading ? (
             <ActivityIndicator color="#FFF" />

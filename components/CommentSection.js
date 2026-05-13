@@ -43,8 +43,6 @@ export default function CommentSection({ entityType, entityId, comments = [], on
           limit: 10,
         },
       });
-      console.log("Comentarios recibidos:", response.data.comments);
-
       if (pageNumber === 1) {
         const sortedComments = sortComments(response.data.comments || []);
         onAddComment(sortedComments);
@@ -94,11 +92,8 @@ export default function CommentSection({ entityType, entityId, comments = [], on
 
       await axiosInstance.delete(`/${entityType}/${entityId}/comments/${commentId}`);
 
-      console.log(`Comentario con ID ${commentId} eliminado`);
-
       const updatedComments = comments.filter(comment => comment._id !== commentId);
       onAddComment(updatedComments);
-      console.log("Estado de comentarios después de eliminar:", updatedComments);
     } catch (error) {
       console.error("Error al eliminar el comentario:", error.message);
       Alert.alert("Error", "No se pudo eliminar el comentario. Verifica la conexión.");
@@ -111,10 +106,7 @@ export default function CommentSection({ entityType, entityId, comments = [], on
         throw new Error("axiosInstance no está definido en el contexto.");
       }
 
-      console.log(`Enviando like para el comentario ID: ${commentId}`);
       const response = await axiosInstance.post(`/${entityType}/${entityId}/comments/${commentId}/like`);
-
-      console.log("Respuesta del like:", response.data);
 
       const updatedComment = response.data.comment;
 
@@ -127,7 +119,6 @@ export default function CommentSection({ entityType, entityId, comments = [], on
 
       const sortedComments = sortComments(updatedComments);
       onAddComment(sortedComments);
-      console.log("Estado de comentarios después de dar like:", sortedComments);
     } catch (error) {
       console.error("Error al dar like:", error.message);
       Alert.alert("Error", "No se pudo dar like al comentario. Verifica la conexión.");
@@ -140,10 +131,7 @@ export default function CommentSection({ entityType, entityId, comments = [], on
         throw new Error("axiosInstance no está definido en el contexto.");
       }
 
-      console.log(`Enviando dislike para el comentario ID: ${commentId}`);
       const response = await axiosInstance.post(`/${entityType}/${entityId}/comments/${commentId}/dislike`);
-
-      console.log("Respuesta del dislike:", response.data);
 
       const updatedComment = response.data.comment;
 
@@ -156,7 +144,6 @@ export default function CommentSection({ entityType, entityId, comments = [], on
 
       const sortedComments = sortComments(updatedComments);
       onAddComment(sortedComments);
-      console.log("Estado de comentarios después de dar dislike:", sortedComments);
     } catch (error) {
       console.error("Error al dar dislike:", error.message);
       Alert.alert("Error", "No se pudo dar dislike al comentario. Verifica la conexión.");
@@ -179,8 +166,6 @@ export default function CommentSection({ entityType, entityId, comments = [], on
           <Text style={styles.noCommentsText}>No hay comentarios aún.</Text>
         ) : (
           comments.map((comment) => {
-            console.log("Renderizando comentario:", comment);
-
             const likedBy = Array.isArray(comment.liked_by) ? comment.liked_by : [];
             const dislikedBy = Array.isArray(comment.disliked_by) ? comment.disliked_by : [];
 

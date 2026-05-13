@@ -3,16 +3,16 @@ import {
   View,
   Text,
   ScrollView,
-  SafeAreaView,
   Image,
   TouchableOpacity,
-  Dimensions,
   StyleSheet,
   Animated,
   RefreshControl,
   Linking,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
 import MenuBar from '../components/MenuBar';
 import LoadingScreen from '../components/LoadingScreen';
@@ -25,29 +25,60 @@ const DATA = [
   { label: "UTOPIA", title: "UTOPIA", artist: "Travis Scott", imageSource: require('../assets/travis.png') },
 ];
 
-const { width: screenWidth } = Dimensions.get('window');
+const HOME_CACHE_KEY = 'homeSpotifyFeed:v2';
 
-// Definir claves de caché
-const CACHE_KEYS = {
-  NEWS_DATA: 'newsData',
-  ARTISTS_DATA: 'artistsData',
-  VIDEOS_DATA: 'videosData',
-  RECENTLY_LISTENED_DATA: 'recentlyListenedData',
+const formatAlbum = (album) => {
+  const artistName = Array.isArray(album.artist)
+    ? album.artist.join(', ')
+    : (album.artist || album.artists?.join(', ') || 'Artista Desconocido');
+
+  return {
+    id: album.id,
+    title: album.name,
+    artist: artistName,
+    imageSource: album.cover_image ? { uri: album.cover_image } : require('../assets/joji.jpg'),
+    release_date: album.release_date,
+    total_tracks: album.total_tracks,
+    type: album.type,
+    url: album.url,
+  };
 };
+
+const formatArtist = (artist) => ({
+  id: artist.id,
+  name: artist.name,
+  genres: artist.genres && artist.genres.length > 0 ? artist.genres.join(', ') : null,
+  popularity: artist.popularity,
+  imageSource: artist.image ? { uri: artist.image } : require('../assets/joji.jpg'),
+  url: artist.url,
+});
+
+const formatSong = (song) => ({
+  id: song.id,
+  title: song.name,
+  artist: song.artist,
+  album: song.album,
+  url: song.url,
+  imageSource: song.cover_image ? { uri: song.cover_image } : require('../assets/joji.jpg'),
+});
 
 export default function HomeScreen({ navigation }) {
   const { axiosInstance, isLoading: isAuthLoading, user } = useContext(AuthContext);
+  const { width: screenWidth } = useWindowDimensions();
 
   const [activeTab, setActiveTab] = useState("News");
   const [newsData, setNewsData] = useState([]);
   const [artistsData, setArtistsData] = useState([]);
   const [videosData, setVideosData] = useState([]);
+  const [moreAlbumsData, setMoreAlbumsData] = useState([]);
+  const [moreArtistsData, setMoreArtistsData] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingHome, setIsLoadingHome] = useState(true);
   const [tabData, setTabData] = useState([]);
   const carouselRef = useRef();
   const tabScrollViewRef = useRef();
   const indicatorAnim = useRef(new Animated.Value(0)).current;
+  const headerScrollY = useRef(new Animated.Value(0)).current;
   const [recentlyListenedData, setRecentlyListenedData] = useState([]);
 
   const fetchData = useCallback(async () => {
@@ -56,10 +87,12 @@ export default function HomeScreen({ navigation }) {
         throw new Error("axiosInstance no está definido en el contexto.");
       }
 
-      const [albumsResult, artistsResult, recentlyListenedResult] = await Promise.allSettled([
-        axiosInstance.get('/top_albums_global'),
-        axiosInstance.get('/top_artists_global'),
+      const [albumsResult, artistsResult, recentlyListenedResult, moreAlbumsResult, moreArtistsResult] = await Promise.allSettled([
+        axiosInstance.get('/top_albums_global', { params: { limit: 20, offset: 0 } }),
+        axiosInstance.get('/top_artists_global', { params: { limit: 20, offset: 0 } }),
         axiosInstance.get('/recently_listened'),
+        axiosInstance.get('/top_albums_global', { params: { limit: 20, offset: 20 } }),
+        axiosInstance.get('/top_artists_global', { params: { limit: 20, offset: 20 } }),
       ]);
 
       const albums = albumsResult.status === 'fulfilled' ? albumsResult.value.data.albums : [];
@@ -67,70 +100,42 @@ export default function HomeScreen({ navigation }) {
       const recentlyListened = recentlyListenedResult.status === 'fulfilled'
         ? recentlyListenedResult.value.data.songs
         : [];
+      const moreAlbums = moreAlbumsResult.status === 'fulfilled' ? moreAlbumsResult.value.data.albums : [];
+      const moreArtists = moreArtistsResult.status === 'fulfilled' ? moreArtistsResult.value.data.artists : [];
 
-      // Procesar albums
-      const formattedNewsData = albums.slice(0, 10).map(album => {
-        const artistName = Array.isArray(album.artist)
-          ? album.artist.join(', ')
-          : (album.artist || album.artists?.join(', ') || 'Artista Desconocido');
-        return {
-          id: album.id,
-          title: album.name,
-          artist: artistName,
-          imageSource: album.cover_image ? { uri: album.cover_image } : require('../assets/joji.jpg'),
-          release_date: album.release_date,
-          total_tracks: album.total_tracks,
-          url: album.url,
-        };
-      });
+      const formattedNewsData = albums.map(formatAlbum);
       setNewsData(formattedNewsData);
 
-      // Procesar artists
-      const formattedArtistsData = artists.slice(0, 10).map(artist => ({
-        id: artist.id, 
-        name: artist.name,
-        genres: artist.genres && artist.genres.length > 0 ? artist.genres.join(', ') : null,
-        imageSource: artist.image ? { uri: artist.image } : require('../assets/joji.jpg'),
-      }));
+      const formattedArtistsData = artists.map(formatArtist);
       setArtistsData(formattedArtistsData);
 
-      const formattedRecentlyListened = recentlyListened.map(song => ({
-        id: song.id,
-        title: song.name,
-        artist: song.artist,
-        imageSource: { uri: song.cover_image },
-      }));
+      const formattedRecentlyListened = recentlyListened.map(formatSong);
       setRecentlyListenedData(formattedRecentlyListened);
 
-      // Guardar datos en caché
-      await AsyncStorage.setItem(CACHE_KEYS.NEWS_DATA, JSON.stringify(formattedNewsData));
-      await AsyncStorage.setItem(CACHE_KEYS.ARTISTS_DATA, JSON.stringify(formattedArtistsData));
-      await AsyncStorage.setItem(CACHE_KEYS.RECENTLY_LISTENED_DATA, JSON.stringify(formattedRecentlyListened));
+      const formattedMoreAlbumsData = moreAlbums.map(formatAlbum);
+      const formattedMoreArtistsData = moreArtists.map(formatArtist);
+      setMoreAlbumsData(formattedMoreAlbumsData);
+      setMoreArtistsData(formattedMoreArtistsData);
+
+      await AsyncStorage.setItem(HOME_CACHE_KEY, JSON.stringify({
+        newsData: formattedNewsData,
+        artistsData: formattedArtistsData,
+        videosData: [],
+        recentlyListenedData: formattedRecentlyListened,
+        moreAlbumsData: formattedMoreAlbumsData,
+        moreArtistsData: formattedMoreArtistsData,
+        cachedAt: Date.now(),
+      }));
 
       if (
         albumsResult.status === 'rejected' ||
         artistsResult.status === 'rejected' ||
-        recentlyListenedResult.status === 'rejected'
+        recentlyListenedResult.status === 'rejected' ||
+        moreAlbumsResult.status === 'rejected' ||
+        moreArtistsResult.status === 'rejected'
       ) {
         console.warn('Spotify data partially unavailable. User may need to reconnect Spotify.');
       }
-
-      try {
-        const videosResponse = await axiosInstance.get('/videos');
-        const formattedVideosData = videosResponse.data.videos.slice(0, 10).map(video => ({
-          title: video.title,
-          artist: video.channel,
-          imageSource: { uri: video.thumbnail },
-          url: video.url,
-        }));
-        setVideosData(formattedVideosData);
-        await AsyncStorage.setItem(CACHE_KEYS.VIDEOS_DATA, JSON.stringify(formattedVideosData));
-      } catch (videoError) {
-        console.error("Error fetching videos:", videoError);
-        Alert.alert("Error de Videos", "No se pudieron cargar los videos. Inténtalo más tarde.");
-        setVideosData([]);
-      }
-
     } catch (error) {
       console.error("Error fetching data:", error);
       Alert.alert("Error", "Hubo un problema al cargar los datos. Por favor, intenta nuevamente.");
@@ -145,27 +150,18 @@ export default function HomeScreen({ navigation }) {
         if (!user) {
           return;
         }
-        // Intentar cargar datos desde caché
-        const [
-          cachedNewsData,
-          cachedArtistsData,
-          cachedVideosData,
-          cachedRecentlyListenedData
-        ] = await Promise.all([
-          AsyncStorage.getItem(CACHE_KEYS.NEWS_DATA),
-          AsyncStorage.getItem(CACHE_KEYS.ARTISTS_DATA),
-          AsyncStorage.getItem(CACHE_KEYS.VIDEOS_DATA),
-          AsyncStorage.getItem(CACHE_KEYS.RECENTLY_LISTENED_DATA),
-        ]);
+        const cachedHomeFeed = await AsyncStorage.getItem(HOME_CACHE_KEY);
 
-        if (cachedNewsData && cachedArtistsData && cachedVideosData && cachedRecentlyListenedData) {
-          setNewsData(JSON.parse(cachedNewsData));
-          setArtistsData(JSON.parse(cachedArtistsData));
-          setVideosData(JSON.parse(cachedVideosData));
-          setRecentlyListenedData(JSON.parse(cachedRecentlyListenedData));
+        if (cachedHomeFeed) {
+          const parsedCache = JSON.parse(cachedHomeFeed);
+          setNewsData(parsedCache.newsData || []);
+          setArtistsData(parsedCache.artistsData || []);
+          setVideosData(parsedCache.videosData || []);
+          setRecentlyListenedData(parsedCache.recentlyListenedData || []);
+          setMoreAlbumsData(parsedCache.moreAlbumsData || []);
+          setMoreArtistsData(parsedCache.moreArtistsData || []);
           setIsLoadingHome(false);
         } else {
-          // Si no hay caché, obtener datos de la red
           fetchData();
         }
       } catch (error) {
@@ -213,23 +209,97 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
+  const featuredCarouselData = newsData.length > 0
+    ? newsData.slice(0, 5).map(item => ({
+      label: item.type ? item.type.replace('_', ' ').toUpperCase() : 'New Release',
+      title: item.title,
+      artist: item.artist,
+      imageSource: item.imageSource,
+      id: item.id,
+    }))
+    : DATA;
+
+  const logoScale = headerScrollY.interpolate({
+    inputRange: [0, 90],
+    outputRange: [1, 0.62],
+    extrapolate: 'clamp',
+  });
+
+  const headerOpacity = headerScrollY.interpolate({
+    inputRange: [0, 90],
+    outputRange: [1, 0.86],
+    extrapolate: 'clamp',
+  });
+
+  const renderAlbumCard = (item, index) => (
+    <TouchableOpacity
+      key={`${item.id || item.title}-${index}`}
+      style={styles.largeContentCard}
+      onPress={() => item.id && navigation.navigate('AlbumDetailsScreen', { album: item })}
+    >
+      <Image source={item.imageSource} style={styles.largeContentImage} />
+      <Text style={styles.largeContentTitle} numberOfLines={2}>{item.title}</Text>
+      <Text style={styles.largeContentSubtitle} numberOfLines={1}>{item.artist}</Text>
+      {item.release_date ? <Text style={styles.contentMeta}>{item.release_date}</Text> : null}
+    </TouchableOpacity>
+  );
+
+  const renderArtistCard = (item, index) => (
+    <TouchableOpacity
+      key={`${item.id || item.name}-${index}`}
+      style={styles.largeContentCard}
+      onPress={() => item.id && navigation.navigate('ArtistDetailsScreen', {
+        artistId: item.id,
+        artistName: item.name,
+        artist: item,
+      })}
+    >
+      <Image source={item.imageSource} style={styles.largeContentImage} />
+      <Text style={styles.largeContentTitle} numberOfLines={2}>{item.name}</Text>
+      <Text style={styles.largeContentSubtitle} numberOfLines={1}>{item.genres || 'Featured artist'}</Text>
+      {item.popularity ? <Text style={styles.contentMeta}>{item.popularity}% popularity</Text> : null}
+    </TouchableOpacity>
+  );
+
+  const renderHorizontalSection = (title, data, renderItem, emptyText) => (
+    <View style={styles.extraSection}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {data.length > 0 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.extraSectionList}>
+          {data.map(renderItem)}
+        </ScrollView>
+      ) : (
+        <Text style={styles.emptySectionText}>{emptyText}</Text>
+      )}
+    </View>
+  );
+
   if (isAuthLoading || isLoadingHome) {
     return <LoadingScreen />;
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
+      <Animated.ScrollView 
         contentContainerStyle={styles.contentContainer}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: headerScrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
         }
         stickyHeaderIndices={[0]}
       >
         {/* Logo de la aplicación - Este será el sticky header */}
-        <View style={styles.stickyHeader}>
-          <Image source={require('../assets/Logo.png')} style={styles.logo} resizeMode="contain" />
-        </View>
+        <Animated.View style={[styles.stickyHeader, { opacity: headerOpacity }]}> 
+          <Animated.Image
+            source={require('../assets/Logo.png')}
+            style={[styles.logo, { transform: [{ scale: logoScale }] }]}
+            resizeMode="contain"
+          />
+        </Animated.View>
 
         {/* Carrusel de arriba (Datos Estáticos) */}
         <ScrollView
@@ -242,8 +312,8 @@ export default function HomeScreen({ navigation }) {
           snapToInterval={screenWidth - 60}
           contentContainerStyle={styles.carouselContainer}
         >
-          {DATA.map((item, index) => (
-            <View key={index} style={[styles.albumSection, { width: screenWidth - 60 }]}>
+          {featuredCarouselData.map((item, index) => (
+            <View key={index} style={[styles.albumSection, { width: screenWidth - 60 }]}> 
               <View style={styles.albumInfo}>
                 <Text style={styles.albumLabel}>{item.label}</Text>
                 <Text style={styles.albumTitle}>{item.title}</Text>
@@ -265,7 +335,7 @@ export default function HomeScreen({ navigation }) {
               </TouchableOpacity>
             ))}
           </View>
-          <Animated.View style={[styles.tabIndicator, { transform: [{ translateX: indicatorAnim }] }]} />
+          <Animated.View style={[styles.tabIndicator, { width: screenWidth / 3, transform: [{ translateX: indicatorAnim }] }]} />
         </View>
 
         {/* Carrusel de la pestaña activa */}
@@ -275,10 +345,10 @@ export default function HomeScreen({ navigation }) {
           style={styles.artistsContainer}
           contentContainerStyle={styles.artistsContentContainer}
         >
-          {tabData.map((item, index) => (
+          {tabData.length > 0 ? tabData.map((item, index) => (
             <TouchableOpacity
               key={index}
-              style={styles.artistCard}
+              style={[styles.artistCard, { width: screenWidth / 3 }]}
               onPress={() => {
                 if (activeTab === "Videos" && item.url) {
                   Linking.openURL(item.url);
@@ -304,7 +374,11 @@ export default function HomeScreen({ navigation }) {
                 <Text style={styles.artistCardName}>{item.genres}</Text>
               )}
             </TouchableOpacity>
-          ))}
+          )) : (
+            <Text style={styles.emptySectionText}>
+              {activeTab === "Videos" ? "Videos estará disponible cuando agreguemos la key de YouTube." : "No hay contenido disponible por ahora."}
+            </Text>
+          )}
         </ScrollView>
 
         {/* Escuchado Recientemente */}
@@ -314,7 +388,7 @@ export default function HomeScreen({ navigation }) {
             {recentlyListenedData.map((song, index) => (
               <TouchableOpacity
                 key={index}
-                style={styles.songCard}
+                style={[styles.songCard, { width: screenWidth / 3 }]}
                 onPress={() => {
                   if (song.id) {
                     navigation.navigate('SongDetailsScreen', {
@@ -336,7 +410,12 @@ export default function HomeScreen({ navigation }) {
             ))}
           </ScrollView>
         </View>
-      </ScrollView>
+
+        {renderHorizontalSection('New Releases', newsData, renderAlbumCard, 'No hay lanzamientos nuevos disponibles.')}
+        {renderHorizontalSection('Trending Artists', artistsData, renderArtistCard, 'No hay artistas disponibles.')}
+        {renderHorizontalSection('More Releases', moreAlbumsData, renderAlbumCard, 'Haz pull-to-refresh para intentar cargar más álbumes.')}
+        {renderHorizontalSection('More Artists', moreArtistsData, renderArtistCard, 'Haz pull-to-refresh para intentar cargar más artistas.')}
+      </Animated.ScrollView>
 
       {/* Barra de menú inferior */}
       <MenuBar />
@@ -350,13 +429,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#171515'
   },
   contentContainer: {
-    paddingVertical: 5
+    paddingTop: 5,
+    paddingBottom: 120,
   },
   stickyHeader: {
-    backgroundColor: '#171515', 
-    paddingVertical: 10,
+    height: 50,
+    backgroundColor: 'rgba(23, 21, 21, 0.96)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
   },
   logo: {
     width: 50,
@@ -440,7 +522,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     left: 0,
-    width: screenWidth / 3,
     height: 3,
     backgroundColor: '#A071CA',
     borderRadius: 2
@@ -453,7 +534,6 @@ const styles = StyleSheet.create({
     paddingLeft: 20,
   },
   artistCard: {
-    width: screenWidth / 3,
     marginRight: 20
   },
   artistImage: {
@@ -479,10 +559,10 @@ const styles = StyleSheet.create({
     marginBottom: 10
   },
   recentlyListenedContainer: { 
-    marginVertical: 10, 
+    marginVertical: 10,
+    paddingLeft: 20,
   },
   songCard: { 
-    width: screenWidth / 3, 
     marginRight: 20,
     backgroundColor: '#2A2A2A',
     borderRadius: 15,
@@ -512,5 +592,51 @@ const styles = StyleSheet.create({
     fontSize: 14, 
     opacity: 0.7, 
     textAlign: 'center',
+  },
+  extraSection: {
+    marginTop: 24,
+    paddingLeft: 20,
+  },
+  extraSectionList: {
+    paddingRight: 20,
+  },
+  largeContentCard: {
+    width: 170,
+    marginRight: 16,
+    padding: 12,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  largeContentImage: {
+    width: '100%',
+    height: 150,
+    borderRadius: 18,
+    marginBottom: 10,
+  },
+  largeContentTitle: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '700',
+    lineHeight: 19,
+  },
+  largeContentSubtitle: {
+    color: '#D9D0E7',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  contentMeta: {
+    color: '#A071CA',
+    fontSize: 11,
+    marginTop: 8,
+    fontWeight: '700',
+  },
+  emptySectionText: {
+    color: '#B9B0C7',
+    fontSize: 14,
+    lineHeight: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
   },
 });

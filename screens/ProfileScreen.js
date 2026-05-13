@@ -25,6 +25,7 @@ export default function ProfileScreen({ navigation }) {
   const [favorites, setFavorites] = useState([]);
   const [comments, setComments] = useState([]);
   const [followingUsers, setFollowingUsers] = useState([]); // Nuevo estado para usuarios seguidos
+  const [isRefreshingUser, setIsRefreshingUser] = useState(false);
 
   const [isEditingUsername, setIsEditingUsername] = useState(false);
   const [newUsername, setNewUsername] = useState(user?.username || '');
@@ -33,8 +34,29 @@ export default function ProfileScreen({ navigation }) {
 
   const entityType = "profile";
   const entityId = user && (user._id || user.id) ? (user._id || user.id).toString() : '';
+  const profileImageSource = user?.profile_picture
+    ? { uri: user.profile_picture }
+    : require('../assets/default_picture.png');
 
   const scrollY = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const refreshUser = async () => {
+      if (!user || entityId || !axiosInstance) return;
+
+      setIsRefreshingUser(true);
+      try {
+        const response = await axiosInstance.get('/me');
+        setUser(response.data.user);
+      } catch (error) {
+        console.error('Error al refrescar el usuario:', error);
+      } finally {
+        setIsRefreshingUser(false);
+      }
+    };
+
+    refreshUser();
+  }, [axiosInstance, entityId, setUser, user]);
 
   useEffect(() => {
     if (!user) return;
@@ -59,7 +81,10 @@ export default function ProfileScreen({ navigation }) {
   // Efecto para obtener los datos de los usuarios seguidos
   useEffect(() => {
     const fetchFollowingUsers = async () => {
-      if (!axiosInstance || !user?.following || user.following.length === 0) return;
+      if (!axiosInstance || !user?.following || user.following.length === 0) {
+        setFollowingUsers([]);
+        return;
+      }
 
       try {
         const response = await axiosInstance.post('/get_following_details', {
@@ -184,7 +209,7 @@ export default function ProfileScreen({ navigation }) {
         <View style={styles.profileInfoContainer}>
           <TouchableOpacity style={styles.profileImageContainer}>
             <Image 
-              source={require('../assets/default_picture.png')} 
+              source={profileImageSource} 
               style={styles.profileImage}
             />
             <View style={styles.editIconContainer}>
@@ -245,7 +270,7 @@ export default function ProfileScreen({ navigation }) {
     </>
   );
 
-  if (isLoading) {
+  if (isLoading || isRefreshingUser) {
     return <LoadingScreen />;
   }
 
@@ -285,7 +310,7 @@ export default function ProfileScreen({ navigation }) {
           }
         ]}>
           <Image 
-            source={require('../assets/default_picture.png')} 
+            source={profileImageSource} 
             style={styles.stickyProfileImage}
           />
           <Text style={styles.stickyUserName}>{user?.username || ''}</Text>

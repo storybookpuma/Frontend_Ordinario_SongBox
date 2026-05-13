@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import { 
-  SafeAreaView,
   View, 
   Text, 
   TouchableOpacity, 
@@ -9,6 +8,7 @@ import {
   FlatList,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
 import SearchBar from '../components/SearchBar';
 import MenuBar from '../components/MenuBar';

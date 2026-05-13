@@ -9,13 +9,20 @@ const SearchBar = ({ searchQuery, handleSearchChange }) => {
         style={styles.searchInput}
         placeholder="What are you looking for?"
         placeholderTextColor="#B0B0B0"
+        accessibilityLabel="Search"
+        accessibilityHint="Search albums, songs, profiles, and artists"
         value={searchQuery}
         onChangeText={handleSearchChange}
         keyboardAppearance='dark'
         clearButtonMode="never" 
       />
       {searchQuery.length > 0 && (
-        <TouchableOpacity onPress={() => handleSearchChange('')} style={styles.clearButton}>
+        <TouchableOpacity
+          onPress={() => handleSearchChange('')}
+          style={styles.clearButton}
+          accessibilityRole="button"
+          accessibilityLabel="Clear search"
+        >
           <Icon name="times-circle" size={20} color="#B0B0B0" />
         </TouchableOpacity>
       )}

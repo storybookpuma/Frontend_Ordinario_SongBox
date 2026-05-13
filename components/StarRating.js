@@ -25,6 +25,9 @@ const StarRating = ({ maxStars = 10, currentRating = 0, onRatingChange, editable
             key={index}
             onPress={() => handlePress(starNumber)}
             disabled={!editable}
+            accessibilityRole="button"
+            accessibilityLabel={`Rate ${starNumber} out of ${maxStars}`}
+            accessibilityState={{ selected: starNumber === selectedRating, disabled: !editable }}
           >
             <Icon
               name={starNumber <= selectedRating ? 'star' : 'star-o'}
