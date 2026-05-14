@@ -389,7 +389,9 @@ export default function ProfileScreen({ navigation }) {
             source={profileImageSource}
             style={styles.stickyProfileImage}
           />
-          <Text style={styles.stickyUserName}>{user?.username || ''}</Text>
+          <View style={styles.stickyNameWrap}>
+            <Text style={styles.stickyUserName}>{user?.username || ''}</Text>
+          </View>
           {currentlyPlaying?.is_playing && currentlyPlaying?.item?.cover_image && (
             <SpinningDisc
               source={{ uri: currentlyPlaying.item.cover_image }}
@@ -714,6 +716,10 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     marginRight: 10,
+  },
+  stickyNameWrap: {
+    flex: 1,
+    justifyContent: 'center',
   },
   stickyUserName: {
     color: '#FFF',
