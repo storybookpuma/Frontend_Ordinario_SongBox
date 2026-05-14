@@ -1,0 +1,12 @@
+export const queryKeys = {
+  homeFeed: ['homeFeed'],
+  search: (category, query) => ['search', category, query],
+  albumDetails: (albumId) => ['albumDetails', albumId],
+  artistDetails: (artistId) => ['artistDetails', artistId],
+  songDetails: (songId) => ['songDetails', songId],
+  profileDetails: (profileId) => ['profileDetails', profileId],
+  userRating: (entityType, entityId) => ['userRating', entityType, entityId],
+  favorites: ['favorites'],
+  followingDetails: (ids = []) => ['followingDetails', ids.join(',')],
+  comments: (entityType, entityId) => ['comments', entityType, entityId],
+};

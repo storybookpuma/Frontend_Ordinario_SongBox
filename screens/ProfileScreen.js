@@ -2,30 +2,31 @@ import React, { useState, useEffect, useContext, useRef, useMemo, useCallback } 
 import { 
   View, 
   Text, 
-  Image, 
   StyleSheet, 
   FlatList, 
   TouchableOpacity,
   Animated,
   Platform,
-  Alert,
   TextInput,
   Modal,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import CommentSection from '../components/CommentSection';
 import { AuthContext } from '../context/AuthContext';
 import LoadingScreen from '../components/LoadingScreen';
 import { SkeletonCard, SkeletonList } from '../components/Skeleton';
+import { queryKeys } from '../api/queryKeys';
+import { getUserId, normalizeComment, splitFavorites } from '../utils/normalizers';
+import { useToast } from '../context/ToastContext';
 
 export default function ProfileScreen({ navigation }) {
   const { user, isLoading, axiosInstance, logout, setUser } = useContext(AuthContext);
-  const [favorites, setFavorites] = useState([]);
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const [comments, setComments] = useState([]);
-  const [followingUsers, setFollowingUsers] = useState([]); // Nuevo estado para usuarios seguidos
   const [isRefreshingUser, setIsRefreshingUser] = useState(false);
-  const [isLoadingFavorites, setIsLoadingFavorites] = useState(false);
-  const [isLoadingFollowing, setIsLoadingFollowing] = useState(false);
 
   const [isEditingUsername, setIsEditingUsername] = useState(false);
   const [newUsername, setNewUsername] = useState(user?.username || '');
@@ -33,7 +34,9 @@ export default function ProfileScreen({ navigation }) {
   const [newComment, setNewComment] = useState('');
 
   const entityType = "profile";
-  const entityId = user && (user._id || user.id) ? (user._id || user.id).toString() : '';
+  const entityId = getUserId(user);
+  const commentsQueryKey = useMemo(() => queryKeys.comments(entityType, entityId), [entityId]);
+  const followingIds = useMemo(() => user?.following || [], [user?.following]);
   const profileImageSource = useMemo(() => (
     user?.profile_picture
       ? { uri: user.profile_picture }
@@ -60,105 +63,128 @@ export default function ProfileScreen({ navigation }) {
     refreshUser();
   }, [axiosInstance, entityId, setUser, user]);
 
-  useEffect(() => {
-    if (!user) return;
-    const fetchFavorites = async () => {
-      if (!axiosInstance) {
-        console.error('axiosInstance no está definido');
-        return;
-      }
+  const {
+    data: favorites = [],
+    isLoading: isLoadingFavorites,
+  } = useQuery({
+    queryKey: queryKeys.favorites,
+    enabled: Boolean(user && axiosInstance),
+    queryFn: async () => {
+      const response = await axiosInstance.get('/get_favorites');
+      return response.data.favorites || [];
+    },
+  });
 
-      setIsLoadingFavorites(true);
-      try {
-        const response = await axiosInstance.get('/get_favorites');
-        setFavorites(response.data.favorites);
-      } catch (error) {
-        if (error.response?.status === 401) return;
-        console.error('Error al obtener favoritos:', error);
-        Alert.alert('Error', 'Hubo un problema al obtener tus favoritos.');
-      } finally {
-        setIsLoadingFavorites(false);
-      }
-    };
+  const {
+    data: followingUsers = [],
+    isLoading: isLoadingFollowing,
+  } = useQuery({
+    queryKey: queryKeys.followingDetails(followingIds),
+    enabled: Boolean(axiosInstance && followingIds.length > 0),
+    queryFn: async () => {
+      const response = await axiosInstance.post('/get_following_details', { ids: followingIds });
+      return response.data.users || [];
+    },
+  });
 
-    fetchFavorites();
-  }, [axiosInstance, user]);
-
-  // Efecto para obtener los datos de los usuarios seguidos
-  useEffect(() => {
-    const fetchFollowingUsers = async () => {
-      if (!axiosInstance || !user?.following || user.following.length === 0) {
-        setFollowingUsers([]);
-        return;
-      }
-
-      setIsLoadingFollowing(true);
-      try {
-        const response = await axiosInstance.post('/get_following_details', {
-          ids: user.following
-        });
-        setFollowingUsers(response.data.users || []);
-      } catch (error) {
-        if (error.response?.status === 401) return;
-        console.error('Error al obtener usuarios seguidos:', error);
-      } finally {
-        setIsLoadingFollowing(false);
-      }
-    };
-    
-    if (user && user.following) {
-      fetchFollowingUsers();
-    }
-  }, [axiosInstance, user]);
-
-  const favoriteAlbums = useMemo(() => favorites.filter(fav => fav.entityType === 'album'), [favorites]);
-  const favoriteSongs = useMemo(() => favorites.filter(fav => fav.entityType === 'song'), [favorites]);
-  const favoriteArtists = useMemo(() => favorites.filter(fav => fav.entityType === 'artist'), [favorites]);
+  const { albums: favoriteAlbums, songs: favoriteSongs, artists: favoriteArtists } = useMemo(
+    () => splitFavorites(favorites),
+    [favorites]
+  );
 
   const handleSaveUsername = async () => {
     if (!newUsername.trim()) {
-      Alert.alert('Error', 'El nombre de usuario no puede estar vacío.');
+      showToast('El nombre de usuario no puede estar vacío.');
       return;
     }
 
     try {
       const response = await axiosInstance.post('/update_username', { username: newUsername });
       setUser({ ...user, username: response.data.username });
-      Alert.alert('Éxito', 'Tu nombre de usuario ha sido actualizado.');
+      showToast('Tu nombre de usuario ha sido actualizado.');
       setIsEditingUsername(false);
     } catch (error) {
       console.error('Error al actualizar el nombre de usuario:', error);
-      Alert.alert('Error', 'No se pudo actualizar tu nombre de usuario.');
+      showToast('No se pudo actualizar tu nombre de usuario.');
     }
   };
 
+  const postCommentMutation = useMutation({
+    mutationFn: (commentText) => axiosInstance.post(`/profile/${entityId}/comments`, {
+      comment_text: commentText,
+    }),
+    onMutate: async (commentText) => {
+      await queryClient.cancelQueries({ queryKey: commentsQueryKey });
+      const previousComments = queryClient.getQueryData(commentsQueryKey);
+      const optimisticComment = normalizeComment({
+        _id: `optimistic-${Date.now()}`,
+        username: user?.username || 'You',
+        user_email: user?.email,
+        comment_text: commentText,
+        timestamp: new Date().toISOString(),
+        likes: 0,
+        dislikes: 0,
+        liked_by: [],
+        disliked_by: [],
+      });
+
+      queryClient.setQueryData(commentsQueryKey, (current) => {
+        if (!current?.pages) {
+          return {
+            pages: [{ comments: [optimisticComment], pagination: { page: 1, total_pages: 1 } }],
+            pageParams: [1],
+          };
+        }
+
+        const [firstPage, ...restPages] = current.pages;
+        return {
+          ...current,
+          pages: [
+            { ...firstPage, comments: [optimisticComment, ...(firstPage.comments || [])] },
+            ...restPages,
+          ],
+        };
+      });
+
+      setNewComment('');
+      return { previousComments };
+    },
+    onSuccess: (response) => {
+      const savedComment = normalizeComment(response.data.comment);
+      queryClient.setQueryData(commentsQueryKey, (current) => {
+        if (!current?.pages) return current;
+
+        return {
+          ...current,
+          pages: current.pages.map((page, pageIndex) => ({
+            ...page,
+            comments: page.comments.map((comment, commentIndex) => (
+              pageIndex === 0 && commentIndex === 0 && String(comment._id).startsWith('optimistic-')
+                ? savedComment
+                : comment
+            )),
+          })),
+        };
+      });
+    },
+    onError: (_error, _commentText, context) => {
+      queryClient.setQueryData(commentsQueryKey, context?.previousComments);
+      showToast('No se pudo agregar el comentario.');
+    },
+  });
+
   const handlePostComment = async () => {
     if (newComment.trim().length === 0) {
-      Alert.alert("Error", "El comentario no puede estar vacío.");
+      showToast("El comentario no puede estar vacío.");
       return;
     }
 
     if (!entityId) {
-      Alert.alert("Error", "No se pudo identificar tu perfil. Intenta iniciar sesión nuevamente.");
+      showToast("No se pudo identificar tu perfil.");
       return;
     }
 
-    try {
-      if (!axiosInstance) {
-        throw new Error("axiosInstance no está definido en el contexto.");
-      }
-
-      const response = await axiosInstance.post(`/profile/${entityId}/comments`, {
-        comment_text: newComment,
-      });
-
-      const updatedComments = [response.data.comment, ...comments];
-      setComments(updatedComments);
-      setNewComment('');
-    } catch (error) {
-      console.error("Error al agregar el comentario:", error.message);
-      Alert.alert("Error", "No se pudo agregar el comentario. Verifica la conexión.");
-    }
+    postCommentMutation.mutate(newComment.trim());
   };
 
   const handleAddComment = useCallback((updatedComments) => {
@@ -237,67 +263,34 @@ export default function ProfileScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Secciones de favoritos */}
-      <Text style={styles.albumsTitle}>My Favorite Albums</Text>
-      {isLoadingFavorites ? (
-        <ProfileCarouselSkeleton />
-      ) : (
-        <FlatList
-          data={favoriteAlbums}
-          renderItem={renderAlbumItem}
-          keyExtractor={(item) => item.entityId}
-          horizontal={true}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.carouselContainer}
-          snapToAlignment="center"
-          snapToInterval={180}
-          decelerationRate="fast"
-        />
-      )}
+      <FavoriteCarouselSection
+        title="My Favorite Albums"
+        titleStyle={styles.albumsTitle}
+        data={favoriteAlbums}
+        isLoading={isLoadingFavorites}
+        renderItem={renderAlbumItem}
+      />
 
-      <Text style={styles.artistsTitle}>My Favorite Artists</Text>
-      {isLoadingFavorites ? (
-        <ProfileCarouselSkeleton />
-      ) : (
-        <FlatList
-          data={favoriteArtists}
-          renderItem={renderArtistItem}
-          keyExtractor={(item) => item.entityId}
-          horizontal={true}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.carouselContainer}
-          snapToAlignment="center"
-          snapToInterval={180}
-          decelerationRate="fast"
-        />
-      )}
+      <FavoriteCarouselSection
+        title="My Favorite Artists"
+        titleStyle={styles.artistsTitle}
+        data={favoriteArtists}
+        isLoading={isLoadingFavorites}
+        renderItem={renderArtistItem}
+      />
 
       <Text style={styles.songsTitle}>My Favorite Songs</Text>      
     </>
   ), [favoriteAlbums, favoriteArtists, isLoadingFavorites, profileImageSource, renderAlbumItem, renderArtistItem, setIsEditingUsername, user?.username]);
 
   const followingSection = useMemo(() => (
-    <>
-      <Text style={styles.followingTitle}>People I Follow</Text>
-      {isLoadingFollowing ? (
-        <SkeletonList count={2} itemStyle={styles.followingSkeletonItem} />
-      ) : (!user.following || user.following.length === 0) ? (
-        <Text style={styles.noFollowingText}>You are not following anyone.</Text>
-      ) : (
-        <FlatList
-          data={followingUsers}
-          renderItem={renderFollowingItem}
-          keyExtractor={(item) => item.id}
-          horizontal={true}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.carouselContainer}
-          snapToAlignment="center"
-          snapToInterval={180}
-          decelerationRate="fast"
-        />
-      )}
-    </>
-  ), [followingUsers, isLoadingFollowing, renderFollowingItem, user?.following]);
+    <FollowingSection
+      followingCount={followingIds.length}
+      followingUsers={followingUsers}
+      isLoading={isLoadingFollowing}
+      renderItem={renderFollowingItem}
+    />
+  ), [followingIds.length, followingUsers, isLoadingFollowing, renderFollowingItem]);
 
   if (isLoading || isRefreshingUser) {
     return <LoadingScreen />;
@@ -378,8 +371,8 @@ export default function ProfileScreen({ navigation }) {
                   multiline={true}
                   numberOfLines={3}
                 />
-                <TouchableOpacity style={styles.postButton} onPress={handlePostComment}>
-                  <Text style={styles.postButtonText}>Publicar</Text>
+                <TouchableOpacity style={styles.postButton} onPress={handlePostComment} disabled={postCommentMutation.isPending}>
+                  <Text style={styles.postButtonText}>{postCommentMutation.isPending ? 'Publicando...' : 'Publicar'}</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -423,6 +416,54 @@ const ProfileCarouselSkeleton = () => (
     ))}
   </View>
 );
+
+const FavoriteCarouselSection = React.memo(function FavoriteCarouselSection({ title, titleStyle, data, isLoading, renderItem }) {
+  return (
+    <>
+      <Text style={titleStyle}>{title}</Text>
+      {isLoading ? (
+        <ProfileCarouselSkeleton />
+      ) : (
+        <FlatList
+          data={data}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.entityId}
+          horizontal={true}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.carouselContainer}
+          snapToAlignment="center"
+          snapToInterval={180}
+          decelerationRate="fast"
+        />
+      )}
+    </>
+  );
+});
+
+const FollowingSection = React.memo(function FollowingSection({ followingCount, followingUsers, isLoading, renderItem }) {
+  return (
+    <>
+      <Text style={styles.followingTitle}>People I Follow</Text>
+      {isLoading ? (
+        <SkeletonList count={2} itemStyle={styles.followingSkeletonItem} />
+      ) : followingCount === 0 ? (
+        <Text style={styles.noFollowingText}>You are not following anyone.</Text>
+      ) : (
+        <FlatList
+          data={followingUsers}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          horizontal={true}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.carouselContainer}
+          snapToAlignment="center"
+          snapToInterval={180}
+          decelerationRate="fast"
+        />
+      )}
+    </>
+  );
+});
 
 const styles = StyleSheet.create({
   container: {

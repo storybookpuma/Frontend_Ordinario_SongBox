@@ -2,28 +2,33 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { 
   View, 
   Text, 
-  Image, 
   StyleSheet, 
   FlatList, 
   TouchableOpacity,
   Animated,
   Platform,
-  Alert,
   TextInput,
   Keyboard,
   TouchableWithoutFeedback
 } from 'react-native';
+import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import MenuBar from '../components/MenuBar'; 
 import CommentSection from '../components/CommentSection';
 import { AuthContext } from '../context/AuthContext';
 import { DetailSkeleton } from '../components/Skeleton';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../api/queryKeys';
+import { splitFavorites } from '../utils/normalizers';
+import { getApiErrorMessage } from '../utils/errors';
+import { useToast } from '../context/ToastContext';
 
 export default function UserDetailsScreen({ route, navigation }) {
   const { profileId } = route.params;
   const { axiosInstance, user, setUser } = useContext(AuthContext); 
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const [profileData, setProfileData] = useState(null);
-  const [favorites, setFavorites] = useState([]);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   
@@ -31,42 +36,38 @@ export default function UserDetailsScreen({ route, navigation }) {
 
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [error, setError] = useState(null);
 
   // Determinar si el usuario actual sigue a este perfil
   const isFollowing = user && user.following && user.following.includes(profileId);
 
+  const profileQuery = useQuery({
+    queryKey: queryKeys.profileDetails(profileId),
+    enabled: Boolean(axiosInstance && profileId),
+    queryFn: async () => {
+      const response = await axiosInstance.get('/profile_details', {
+        params: { profile_id: profileId },
+      });
+      return response.data;
+    },
+  });
+
   useEffect(() => {
-    const fetchProfileData = async () => {
-      if (!axiosInstance || !profileId) {
-        setError("No se pudo cargar el perfil.");
-        setIsLoadingProfile(false);
-        return;
-      }
+    if (profileQuery.data) {
+      setProfileData(profileQuery.data);
+      setError(null);
+    }
+  }, [profileQuery.data]);
 
-      try {
-        const response = await axiosInstance.get('/profile_details', {
-          params: { profile_id: profileId }
-        });
+  useEffect(() => {
+    if (profileQuery.isError) {
+      const message = getApiErrorMessage(profileQuery.error, 'No se pudo cargar el perfil.');
+      setError(message);
+      showToast(message);
+    }
+  }, [profileQuery.error, profileQuery.isError, showToast]);
 
-        setProfileData(response.data);
-        setFavorites(response.data.favorites || []);
-      } catch (err) {
-        console.error("Error al cargar el perfil:", err);
-        Alert.alert('Error', 'No se pudo cargar el perfil del usuario.');
-        setError('No se pudo cargar el perfil.');
-      } finally {
-        setIsLoadingProfile(false);
-      }
-    };
-
-    fetchProfileData();
-  }, [axiosInstance, profileId]);
-
-  const favoriteAlbums = favorites.filter(fav => fav.entityType === 'album');
-  const favoriteSongs = favorites.filter(fav => fav.entityType === 'song');
-  const favoriteArtists = favorites.filter(fav => fav.entityType === 'artist');
+  const { albums: favoriteAlbums, songs: favoriteSongs, artists: favoriteArtists } = splitFavorites(profileData?.favorites || []);
 
   const handleAddComment = (updatedComments) => {
     setComments(updatedComments);
@@ -74,7 +75,7 @@ export default function UserDetailsScreen({ route, navigation }) {
 
   const handlePostComment = async () => {
     if (newComment.trim().length === 0) {
-      Alert.alert("Error", "El comentario no puede estar vacío.");
+      showToast("El comentario no puede estar vacío.");
       return;
     }
 
@@ -92,61 +93,41 @@ export default function UserDetailsScreen({ route, navigation }) {
       setNewComment('');
     } catch (error) {
       console.error("Error al agregar el comentario:", error.message);
-      Alert.alert("Error", "No se pudo agregar el comentario. Verifica la conexión.");
+      showToast("No se pudo agregar el comentario.");
     }
   };
 
-  const handleFollow = async () => {
-    try {
-      if (!axiosInstance) {
-        throw new Error("axiosInstance no está definido en el contexto.");
-      }
-      
-      const response = await axiosInstance.post('/follow_user', {
-        profile_id: profileId
-      });
-      Alert.alert("Éxito", response.data.message);
-
-      // Actualizar el estado del usuario logueado para reflejar que ahora sigue a este perfil
+  const followMutation = useMutation({
+    mutationFn: (shouldFollow) => axiosInstance.post(shouldFollow ? '/follow_user' : '/unfollow_user', {
+      profile_id: profileId,
+    }),
+    onMutate: async (shouldFollow) => {
+      const previousUser = user;
       if (user) {
-        const updatedUser = { ...user };
-        updatedUser.following = updatedUser.following || [];
-        if (!updatedUser.following.includes(profileId)) {
-          updatedUser.following.push(profileId);
-        }
-        setUser(updatedUser);
+        const following = Array.isArray(user.following) ? user.following : [];
+        setUser({
+          ...user,
+          following: shouldFollow
+            ? Array.from(new Set([...following, profileId]))
+            : following.filter((id) => id !== profileId),
+        });
       }
-    } catch (err) {
-      console.error("Error al seguir al usuario:", err);
-      Alert.alert("Error", "No se pudo seguir al usuario.");
-    }
-  };
+      return { previousUser };
+    },
+    onSuccess: (response) => {
+      showToast(response.data.message || 'Perfil actualizado.');
+      queryClient.invalidateQueries({ queryKey: queryKeys.followingDetails(user?.following || []) });
+    },
+    onError: (err, _shouldFollow, context) => {
+      if (context?.previousUser) setUser(context.previousUser);
+      showToast(getApiErrorMessage(err, 'No se pudo actualizar el seguimiento.'));
+    },
+  });
 
-  const handleUnfollow = async () => {
-    try {
-      if (!axiosInstance) {
-        throw new Error("axiosInstance no está definido en el contexto.");
-      }
-      
-      const response = await axiosInstance.post('/unfollow_user', {
-        profile_id: profileId
-      });
-      Alert.alert("Éxito", response.data.message);
+  const handleFollow = () => followMutation.mutate(true);
+  const handleUnfollow = () => followMutation.mutate(false);
 
-      // Actualizar el estado del usuario logueado para reflejar que ya no sigue a este perfil
-      if (user) {
-        const updatedUser = { ...user };
-        updatedUser.following = updatedUser.following || [];
-        updatedUser.following = updatedUser.following.filter(id => id !== profileId);
-        setUser(updatedUser);
-      }
-    } catch (err) {
-      console.error("Error al dejar de seguir al usuario:", err);
-      Alert.alert("Error", "No se pudo dejar de seguir al usuario.");
-    }
-  };
-
-  if (isLoadingProfile) {
+  if (profileQuery.isLoading) {
     return <DetailSkeleton />;
   }
 
@@ -185,6 +166,7 @@ export default function UserDetailsScreen({ route, navigation }) {
           <Image 
             source={require('../assets/default_picture.png')} 
             style={styles.stickyProfileImage}
+            contentFit="cover"
           />
           <Text style={styles.stickyUserName}>{profileData.username || ''}</Text>
         </Animated.View>
@@ -198,6 +180,7 @@ export default function UserDetailsScreen({ route, navigation }) {
                     <Image 
                       source={require('../assets/default_picture.png')} 
                       style={styles.profileImage}
+                      contentFit="cover"
                     />
                     <View style={styles.editIconContainer}>
                       <Icon name="pencil" size={20} color="#fff" />
@@ -232,7 +215,7 @@ export default function UserDetailsScreen({ route, navigation }) {
                           navigation.navigate('AlbumDetailsScreen', { album: { id: item.entityId } });
                         }}
                       >
-                        <Image source={{ uri: item.image }} style={styles.albumImage} />
+                        <Image source={{ uri: item.image }} style={styles.albumImage} contentFit="cover" cachePolicy="memory-disk" transition={180} placeholder={require('../assets/default_picture.png')} />
                         <Text style={styles.albumTitle}>{item.name}</Text>
                       </TouchableOpacity>
                     )}
@@ -262,7 +245,7 @@ export default function UserDetailsScreen({ route, navigation }) {
                           navigation.navigate('ArtistDetailsScreen', { artistId: item.entityId });
                         }}
                       >
-                        <Image source={{ uri: item.image }} style={styles.albumImage} />
+                        <Image source={{ uri: item.image }} style={styles.albumImage} contentFit="cover" cachePolicy="memory-disk" transition={180} placeholder={require('../assets/default_picture.png')} />
                         <Text style={styles.albumTitle}>{item.name}</Text>
                       </TouchableOpacity>
                     )}
@@ -292,7 +275,7 @@ export default function UserDetailsScreen({ route, navigation }) {
                           navigation.navigate('SongDetailsScreen', { songId: item.entityId });
                         }}
                       >
-                        <Image source={{ uri: item.image }} style={styles.songImage} />
+                        <Image source={{ uri: item.image }} style={styles.songImage} contentFit="cover" cachePolicy="memory-disk" transition={180} placeholder={require('../assets/default_picture.png')} />
                         <View style={styles.songInfo}>
                           <Text style={styles.songTitle}>{item.name}</Text>
                         </View>

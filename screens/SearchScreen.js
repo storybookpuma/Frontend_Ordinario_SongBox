@@ -1,34 +1,81 @@
-import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useContext, useMemo } from 'react';
 import { 
   View, 
   Text, 
   TouchableOpacity, 
-  Image, 
   StyleSheet, 
   FlatList,
   Animated,
   useWindowDimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
+import { useQuery } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
 import SearchBar from '../components/SearchBar';
 import { SkeletonCard } from '../components/Skeleton';
+import { queryKeys } from '../api/queryKeys';
+import { getApiErrorMessage } from '../utils/errors';
+import { useToast } from '../context/ToastContext';
 
 export default function SearchScreen({ navigation }) {
   const { axiosInstance, isLoading: authLoading } = useContext(AuthContext);
+  const { showToast } = useToast();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Albums');
-  const [searchResults, setSearchResults] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
 
   const debounceTimeout = useRef(null);
   const resultsAnim = useRef(new Animated.Value(0)).current;
-  const hasResults = searchResults.length > 0;
+  const normalizedQuery = debouncedQuery.trim();
   const collageGap = 12;
   const collageItemWidth = (screenWidth - 40 - collageGap) / 2;
+
+  const searchEndpoint = useMemo(() => {
+    switch (selectedCategory) {
+      case 'Albums':
+        return '/search_album';
+      case 'Songs':
+        return '/search_song';
+      case 'Artists':
+        return '/search_artist';
+      case 'Profiles':
+        return '/search_profile';
+      default:
+        return '';
+    }
+  }, [selectedCategory]);
+
+  const searchQueryResult = useQuery({
+    queryKey: queryKeys.search(selectedCategory, normalizedQuery),
+    enabled: Boolean(axiosInstance && normalizedQuery && searchEndpoint),
+    queryFn: async () => {
+      const response = await axiosInstance.get(searchEndpoint, {
+        params: { q: normalizedQuery, limit: 10 },
+        timeout: 5000,
+      });
+
+      switch (selectedCategory) {
+        case 'Albums':
+          return response.data.albums || [];
+        case 'Songs':
+          return response.data.tracks || [];
+        case 'Artists':
+          return response.data.artists || [];
+        case 'Profiles':
+          return response.data.profiles || [];
+        default:
+          return [];
+      }
+    },
+  });
+
+  const searchResults = searchQueryResult.data || [];
+  const isLoading = searchQueryResult.isFetching && Boolean(normalizedQuery);
+  const error = searchQueryResult.isError ? getApiErrorMessage(searchQueryResult.error, 'No se pudieron cargar los resultados.') : null;
+  const hasResults = searchResults.length > 0;
 
   useEffect(() => {
     Animated.spring(resultsAnim, {
@@ -46,83 +93,11 @@ export default function SearchScreen({ navigation }) {
 
   const handleCategoryChange = (category) => {
     setSelectedCategory(category);
-    setSearchResults([]);
     setSearchQuery('');
+    setDebouncedQuery('');
   };
 
   const categories = ['Albums', 'Songs', 'Profiles', 'Artists'];
-
-  const performSearch = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      let endpoint = '';
-      switch (selectedCategory) {
-        case 'Albums':
-          endpoint = '/search_album';
-          break;
-        case 'Songs':
-          endpoint = '/search_song';
-          break;
-        case 'Artists':
-          endpoint = '/search_artist';
-          break;
-        case 'Profiles':
-          endpoint = '/search_profile';
-          break;
-        default:
-          setSearchResults([]);
-          setIsLoading(false);
-          return;
-      }
-
-      if (!axiosInstance) {
-        throw new Error("No se pudo establecer la conexión con el servidor.");
-      }
-
-      const response = await axiosInstance.get(endpoint, {
-        params: {
-          q: searchQuery,
-          limit: 10,
-        },
-        timeout: 5000,
-      });
-
-      switch (selectedCategory) {
-        case 'Albums':
-          setSearchResults(response.data.albums || []);
-          break;
-        case 'Songs':
-          setSearchResults(response.data.tracks || []);
-          break;
-        case 'Artists':
-          setSearchResults(response.data.artists || []);
-          break;
-        case 'Profiles':
-          setSearchResults(response.data.profiles || []);
-          break;
-        default:
-          setSearchResults([]);
-      }
-
-    } catch (err) {
-      console.error("Error fetching search results:", err);
-      if (err.response) {
-        console.error("Status:", err.response.status);
-        console.error("Data:", err.response.data);
-        setError(`Error ${err.response.status}: ${err.response.data.message || 'Error fetching search results'}`);
-      } else if (err.request) {
-        console.error("Request made but no response received:", err.request);
-        setError("No se pudo conectar con el servidor. Verifica tu conexión a internet.");
-      } else {
-        console.error("Error setting up the request:", err.message);
-        setError("Error al configurar la solicitud.");
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [axiosInstance, searchQuery, selectedCategory]);
 
   useEffect(() => {
     if (debounceTimeout.current) {
@@ -130,14 +105,12 @@ export default function SearchScreen({ navigation }) {
     }
 
     if (searchQuery.trim() === '') {
-      setSearchResults([]);
-      setIsLoading(false);
-      setError(null);
+      setDebouncedQuery('');
       return undefined;
     }
 
     debounceTimeout.current = setTimeout(() => {
-      performSearch();
+      setDebouncedQuery(searchQuery);
     }, 500);
 
     return () => {
@@ -145,7 +118,13 @@ export default function SearchScreen({ navigation }) {
         clearTimeout(debounceTimeout.current);
       }
     };
-  }, [performSearch, searchQuery]);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (error) {
+      showToast(error);
+    }
+  }, [error, showToast]);
 
   const handleResultPress = (item) => {
     if (selectedCategory === 'Albums') {
@@ -193,7 +172,7 @@ export default function SearchScreen({ navigation }) {
         accessibilityRole="button"
         accessibilityLabel={`Open ${item.name || item.username || item.title || 'result'}`}
       >
-        <Image source={getResultImage(item)} style={styles.collageImage} />
+        <Image source={getResultImage(item)} style={styles.collageImage} contentFit="cover" cachePolicy="memory-disk" transition={180} />
         <View style={styles.collageOverlay}>
           <Text style={styles.collageTitle} numberOfLines={2}>
             {item.name || item.username || item.title}
@@ -245,7 +224,7 @@ export default function SearchScreen({ navigation }) {
             <Image 
               source={require('../assets/Logo.png')} 
               style={styles.logo}
-              resizeMode="contain"
+              contentFit="contain"
             />
           </View>
 

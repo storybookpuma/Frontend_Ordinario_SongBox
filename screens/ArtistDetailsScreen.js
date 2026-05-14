@@ -5,7 +5,6 @@ import {
   View, 
   Text, 
   StyleSheet, 
-  Image, 
   ScrollView, 
   TouchableOpacity, 
   Animated,
@@ -16,16 +15,24 @@ import {
   Keyboard,
   useWindowDimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useNavigation } from '@react-navigation/native';
+import { useQuery } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
 import CommentSection from '../components/CommentSection';
 import FavoriteButton from '../components/FavoriteButton';
 import StarRating from '../components/StarRating'; 
 import { DetailSkeleton } from '../components/Skeleton';
+import { queryKeys } from '../api/queryKeys';
+import { useToast } from '../context/ToastContext';
+import { useFavorites } from '../hooks/useFavorites';
+import { useRating } from '../hooks/useRating';
+import { getApiErrorMessage } from '../utils/errors';
 
 const ArtistDetailsScreen = ({ route }) => {
   const navigation = useNavigation();
+  const { showToast } = useToast();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const scrollY = useRef(new Animated.Value(0)).current;
   const { axiosInstance, user } = useContext(AuthContext);
@@ -46,6 +53,20 @@ const ArtistDetailsScreen = ({ route }) => {
 
   // Estado para el nuevo comentario
   const [newComment, setNewComment] = useState('');
+
+  const { favorites, invalidateFavorites } = useFavorites();
+  const userRatingQuery = useRating({ entityType: 'artist', entityId: artistId, enabled: Boolean(artistData?.artist?.id) });
+
+  const artistDetailsQuery = useQuery({
+    queryKey: queryKeys.artistDetails(artistId),
+    enabled: Boolean(artistId && axiosInstance),
+    queryFn: async () => {
+      const response = await axiosInstance.get('/artist_details', {
+        params: { artist_id: artistId },
+      });
+      return response.data;
+    },
+  });
 
   const imageScale = scrollY.interpolate({
     inputRange: [-100, 0],
@@ -70,6 +91,10 @@ const ArtistDetailsScreen = ({ route }) => {
       <Image 
         source={{ uri: album.image || 'https://via.placeholder.com/150' }}
         style={styles.albumImage}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        transition={180}
+        placeholder={require('../assets/default_picture.png')}
         onLoadStart={() => {
           let newLoadingState = [...loadingAlbumImages];
           newLoadingState[index] = true;
@@ -87,81 +112,40 @@ const ArtistDetailsScreen = ({ route }) => {
   );
 
   useEffect(() => {
-    const fetchArtistData = async () => {
-      if (!artistId) {
-        Alert.alert("Error", "No se proporcionó el ID del artista.");
-        return;
-      }
+    if (!artistId) {
+      Alert.alert("Error", "No se proporcionó el ID del artista.");
+      return;
+    }
 
-      try {
-        const response = await axiosInstance.get(`/artist_details`, {
-          params: {
-            artist_id: artistId,
-            cacheBust: new Date().getTime(),
-          },
-        });
-
-        setArtistData(response.data);
-
-        setLoadingAlbumImages(new Array(response.data.albums.length).fill(true));
-
-        setAverageRating(response.data.artist.averageRating || 0);
-        setRatingCount(response.data.artist.ratingCount || 0);
-      } catch (error) {
-        console.error("Error al cargar los datos del artista:", error);
-        Alert.alert("Error", "Hubo un problema al cargar los datos del artista. Por favor, intenta nuevamente.");
-      }
-    };
-
-    fetchArtistData();
-  }, [artistId, axiosInstance]);
+    if (!artistDetailsQuery.data) return;
+    setArtistData(artistDetailsQuery.data);
+    setLoadingAlbumImages(new Array(artistDetailsQuery.data.albums.length).fill(false));
+    setAverageRating(artistDetailsQuery.data.artist.averageRating || 0);
+    setRatingCount(artistDetailsQuery.data.artist.ratingCount || 0);
+  }, [artistDetailsQuery.data, artistId]);
 
   useEffect(() => {
-    const checkIfFavorite = async () => {
-      try {
-        const response = await axiosInstance.get('/get_favorites');
-        const favorites = response.data.favorites;
-        const isFav = favorites.some(
-          (fav) => fav.entityId === artistId && fav.entityType === 'artist'
-        );
-        setIsFavorite(isFav);
-      } catch (error) {
-        console.error('Error al verificar si es favorito:', error);
-      }
-    };
-
-    if (artistData) {
-      checkIfFavorite();
+    if (artistDetailsQuery.isError) {
+      showToast(getApiErrorMessage(artistDetailsQuery.error, 'Hubo un problema al cargar los datos del artista.'));
     }
-  }, [artistData, artistId, axiosInstance]);
+  }, [artistDetailsQuery.error, artistDetailsQuery.isError, showToast]);
 
   useEffect(() => {
-    const fetchUserRating = async () => {
-      if (!artistData || !artistData.artist || !artistData.artist.id) return;
-      try {
-        const response = await axiosInstance.get('/get_user_rating', {
-          params: {
-            entityType: 'artist',
-            entityId: artistData.artist.id,
-          },
-        });
-        if (response.data.rating) {
-          setUserRating(response.data.rating);
-        }
-      } catch (error) {
-        console.error('Error al obtener la calificación del usuario:', error);
-      }
-    };
+    setIsFavorite(favorites.some((fav) => fav.entityId === artistId && fav.entityType === 'artist'));
+  }, [artistId, favorites]);
 
-    if (artistData) {
-      fetchUserRating();
-    }
-  }, [artistData, axiosInstance]);
+  useEffect(() => {
+    if (userRatingQuery.data) setUserRating(userRatingQuery.data);
+  }, [userRatingQuery.data]);
 
   const handleToggleFavorite = async () => {
+    const nextFavorite = !isFavorite;
+    setIsFavorite(nextFavorite);
+
     try {
-      if (isFavorite) {
+      if (!nextFavorite) {
         await axiosInstance.post('/remove_favorite', {
+          entityType: 'artist',
           entityId: artistId,
         });
       } else {
@@ -172,10 +156,11 @@ const ArtistDetailsScreen = ({ route }) => {
           image: artistData.artist.image,
         });
       }
-      setIsFavorite(!isFavorite);
+      invalidateFavorites();
     } catch (error) {
+      setIsFavorite(!nextFavorite);
       console.error('Error al actualizar favorito:', error);
-      Alert.alert('Error', 'Hubo un problema al actualizar los favoritos.');
+      showToast('No se pudieron actualizar los favoritos.');
     }
   };
 
@@ -190,24 +175,20 @@ const ArtistDetailsScreen = ({ route }) => {
       return;
     }
 
+    const previousRating = userRating;
     try {
-      const response = await axiosInstance.post('/rate_entity', {
-        entityType: 'artist',
-        entityId: artistData.artist.id,
-        rating: rating,
+      await userRatingQuery.rateEntity({
+        rating,
+        currentRating: previousRating,
+        setUserRating,
+        onSuccess: (data) => {
+          setAverageRating(data.averageRating);
+          setRatingCount(data.ratingCount);
+        },
       });
-
-      Alert.alert('Éxito', 'Tu calificación ha sido registrada.');
-      setAverageRating(response.data.averageRating);
-      setRatingCount(response.data.ratingCount);
-      setUserRating(rating);
     } catch (error) {
-      if (error.response && error.response.data.message) {
-        Alert.alert('Error', error.response.data.message);
-      } else {
-        console.error('Error al calificar:', error);
-        Alert.alert('Error', 'No se pudo registrar tu calificación.');
-      }
+      setUserRating(previousRating);
+      showToast(getApiErrorMessage(error, 'No se pudo registrar tu calificación.'));
     }
   };
 
@@ -255,6 +236,10 @@ const ArtistDetailsScreen = ({ route }) => {
               source={{ uri: artistData.artist.image || 'https://via.placeholder.com/500' }}  
               style={styles.blurredBackground}
               blurRadius={50}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={220}
+              placeholder={require('../assets/default_picture.png')}
               onLoadStart={() => setLoadingArtistImage(true)}
               onLoadEnd={() => setLoadingArtistImage(false)}
             />
@@ -283,6 +268,10 @@ const ArtistDetailsScreen = ({ route }) => {
               <Image 
                 source={{ uri: artistData.artist.image || 'https://via.placeholder.com/500' }}  
                 style={styles.artistImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={220}
+                placeholder={require('../assets/default_picture.png')}
                 onLoadStart={() => setLoadingArtistImage(true)}
                 onLoadEnd={() => setLoadingArtistImage(false)}
               />
@@ -416,7 +405,6 @@ const styles = StyleSheet.create({
   artistImage: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
   },
   contentContainer: {
     padding: 20,

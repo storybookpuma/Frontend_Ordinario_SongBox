@@ -1,176 +1,191 @@
 // src/components/CommentSection.js
 
-import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
+import React, { useContext, useEffect, useMemo, useRef } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
-  Image, 
-  Alert, 
   TouchableOpacity,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
 import { SkeletonList } from './Skeleton';
+import { queryKeys } from '../api/queryKeys';
+import { sortComments } from '../utils/normalizers';
+import { useToast } from '../context/ToastContext';
+
+const getCommentsSignature = (commentsList = []) => commentsList.map((comment) => comment._id || comment.id).join('|');
 
 export default function CommentSection({ entityType, entityId, comments = [], onAddComment, showLoadErrorAlert = true }) { 
   const { axiosInstance, user } = useContext(AuthContext);
-
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
-  const commentsRef = useRef(comments);
-  const onAddCommentRef = useRef(onAddComment);
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
+  const queryKey = useMemo(() => queryKeys.comments(entityType, entityId), [entityId, entityType]);
+  const lastSyncedSignature = useRef('');
 
   useEffect(() => {
-    commentsRef.current = comments;
-  }, [comments]);
+    const nextSignature = getCommentsSignature(comments);
+    if (comments.length > 0 && entityId && nextSignature !== lastSyncedSignature.current) {
+      lastSyncedSignature.current = nextSignature;
+      queryClient.setQueryData(queryKey, {
+        pages: [{ comments, pagination: { page: 1, total_pages: 1 } }],
+        pageParams: [1],
+      });
+    }
+  }, [comments, entityId, queryClient, queryKey]);
+
+  const commentsQuery = useInfiniteQuery({
+    queryKey,
+    enabled: Boolean(user && entityId && axiosInstance),
+    initialPageParam: 1,
+    queryFn: async ({ pageParam }) => {
+      const response = await axiosInstance.get(`/${entityType}/${entityId}/comments`, {
+        params: { page: pageParam, limit: 10 },
+      });
+
+      return {
+        comments: response.data.comments || [],
+        pagination: response.data.pagination || { page: pageParam, total_pages: 1 },
+      };
+    },
+    getNextPageParam: (lastPage) => {
+      const page = lastPage.pagination?.page || 1;
+      const totalPages = lastPage.pagination?.total_pages || 1;
+      return page < totalPages ? page + 1 : undefined;
+    },
+  });
+
+  const visibleComments = useMemo(() => {
+    const queryComments = commentsQuery.data?.pages.flatMap((page) => page.comments || []) || [];
+    return sortComments(queryComments);
+  }, [commentsQuery.data]);
 
   useEffect(() => {
-    onAddCommentRef.current = onAddComment;
-  }, [onAddComment]);
+    const nextSignature = getCommentsSignature(visibleComments);
+    if (visibleComments.length > 0 && nextSignature !== lastSyncedSignature.current) {
+      lastSyncedSignature.current = nextSignature;
+      onAddComment?.(visibleComments);
+    }
+  }, [onAddComment, visibleComments]);
 
-  const sortComments = (commentsList) => {
-    return [...commentsList].sort((a, b) => b.likes - a.likes);
+  useEffect(() => {
+    if (commentsQuery.isError) {
+      console.error("Error al obtener los comentarios:", commentsQuery.error?.message);
+      if (showLoadErrorAlert) {
+        showToast("No se pudieron cargar los comentarios.");
+      }
+    }
+  }, [commentsQuery.error?.message, commentsQuery.isError, showLoadErrorAlert, showToast]);
+
+  const updateCachedComments = (updater) => {
+    queryClient.setQueryData(queryKey, (current) => {
+      if (!current?.pages) return current;
+
+      return {
+        ...current,
+        pages: current.pages.map((page) => ({
+          ...page,
+          comments: updater(page.comments || []),
+        })),
+      };
+    });
   };
 
-  const fetchComments = useCallback(async (pageNumber) => {
-    if (!entityId) {
-      return;
-    };
+  const deleteCommentMutation = useMutation({
+    mutationFn: (commentId) => axiosInstance.delete(`/${entityType}/${entityId}/comments/${commentId}`),
+    onMutate: async (commentId) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previousComments = queryClient.getQueryData(queryKey);
+      updateCachedComments((cachedComments) => cachedComments.filter((comment) => comment._id !== commentId));
+      return { previousComments };
+    },
+    onError: (_error, _commentId, context) => {
+      queryClient.setQueryData(queryKey, context?.previousComments);
+      showToast("No se pudo eliminar el comentario.");
+    },
+  });
 
-    try {
-      if (!axiosInstance) {
-        throw new Error("axiosInstance no está definido en el contexto.");
-      }
+  const reactionMutation = useMutation({
+    mutationFn: ({ commentId, reaction }) => axiosInstance.post(`/${entityType}/${entityId}/comments/${commentId}/${reaction}`),
+    onMutate: async ({ commentId, reaction }) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previousComments = queryClient.getQueryData(queryKey);
+      const userId = user?.id?.toString();
 
-      if (pageNumber === 1 && commentsRef.current.length === 0) setIsLoading(true);
+      updateCachedComments((cachedComments) => cachedComments.map((comment) => {
+        if (comment._id !== commentId || !userId) return comment;
 
-      const response = await axiosInstance.get(`/${entityType}/${entityId}/comments`, {
-        params: {
-          page: pageNumber,
-          limit: 10,
-        },
-      });
-      if (pageNumber === 1) {
-        const sortedComments = sortComments(response.data.comments || []);
-        onAddCommentRef.current(sortedComments);
-      } else {
-        const combinedComments = [...commentsRef.current, ...(response.data.comments || [])];
-        const sortedComments = sortComments(combinedComments);
-        onAddCommentRef.current(sortedComments);
-      }
+        const likedBy = Array.isArray(comment.liked_by) ? comment.liked_by : [];
+        const dislikedBy = Array.isArray(comment.disliked_by) ? comment.disliked_by : [];
+        const isLike = reaction === 'like';
+        const hasLiked = likedBy.includes(userId);
+        const hasDisliked = dislikedBy.includes(userId);
 
-      setTotalPages(response.data.pagination.total_pages);
-      setPage(pageNumber);
-    } catch (error) {
-      console.error("Error al obtener los comentarios:", error.message);
-      if (showLoadErrorAlert) {
-        Alert.alert("Error", "No se pudieron cargar los comentarios. Verifica la conexión.");
-      }
-    } finally {
-      if (pageNumber === 1) setIsLoading(false);
-    }
-  }, [axiosInstance, entityId, entityType, showLoadErrorAlert]);
-
-  useEffect(() => {
-    const fetchCommentsInitial = async () => {
-      try {
-        if (!user || !entityId) {
-          return;
+        if (isLike) {
+          return {
+            ...comment,
+            liked_by: hasLiked ? likedBy.filter((id) => id !== userId) : [...likedBy, userId],
+            disliked_by: hasDisliked ? dislikedBy.filter((id) => id !== userId) : dislikedBy,
+            likes: Math.max(0, (comment.likes || 0) + (hasLiked ? -1 : 1)),
+            dislikes: Math.max(0, (comment.dislikes || 0) - (hasDisliked ? 1 : 0)),
+          };
         }
-        fetchComments(1);
-      } catch (error) {
-        console.error("Error al inicializar la CommentSection:", error);
-        Alert.alert("Error", "Hubo un problema al inicializar la sección de comentarios. Por favor, intenta nuevamente.");
-      }
-    };
 
-    fetchCommentsInitial();
-  }, [entityId, fetchComments, user]);
+        return {
+          ...comment,
+          disliked_by: hasDisliked ? dislikedBy.filter((id) => id !== userId) : [...dislikedBy, userId],
+          liked_by: hasLiked ? likedBy.filter((id) => id !== userId) : likedBy,
+          dislikes: Math.max(0, (comment.dislikes || 0) + (hasDisliked ? -1 : 1)),
+          likes: Math.max(0, (comment.likes || 0) - (hasLiked ? 1 : 0)),
+        };
+      }));
+
+      return { previousComments };
+    },
+    onSuccess: (response) => {
+      const updatedComment = response.data.comment;
+      updateCachedComments((cachedComments) => cachedComments.map((comment) => (
+        comment._id === updatedComment._id ? updatedComment : comment
+      )));
+    },
+    onError: (_error, _variables, context) => {
+      queryClient.setQueryData(queryKey, context?.previousComments);
+      showToast("No se pudo actualizar la reacción.");
+    },
+  });
 
   const handleLoadMore = () => {
-    if (page < totalPages && !isLoading) {
-      fetchComments(page + 1);
+    if (commentsQuery.hasNextPage && !commentsQuery.isFetchingNextPage) {
+      commentsQuery.fetchNextPage();
     }
   };
 
   const handleDeleteComment = async (commentId) => {
-    try {
-      if (!axiosInstance) {
-        throw new Error("axiosInstance no está definido en el contexto.");
-      }
-
-      await axiosInstance.delete(`/${entityType}/${entityId}/comments/${commentId}`);
-
-      const updatedComments = comments.filter(comment => comment._id !== commentId);
-      onAddComment(updatedComments);
-    } catch (error) {
-      console.error("Error al eliminar el comentario:", error.message);
-      Alert.alert("Error", "No se pudo eliminar el comentario. Verifica la conexión.");
-    }
+    deleteCommentMutation.mutate(commentId);
   };
 
   const handleLike = async (commentId) => {
-    try {
-      if (!axiosInstance) {
-        throw new Error("axiosInstance no está definido en el contexto.");
-      }
-
-      const response = await axiosInstance.post(`/${entityType}/${entityId}/comments/${commentId}/like`);
-
-      const updatedComment = response.data.comment;
-
-      const updatedComments = comments.map(comment => {
-        if (comment._id === updatedComment._id) {
-          return updatedComment;
-        }
-        return comment;
-      });
-
-      const sortedComments = sortComments(updatedComments);
-      onAddComment(sortedComments);
-    } catch (error) {
-      console.error("Error al dar like:", error.message);
-      Alert.alert("Error", "No se pudo dar like al comentario. Verifica la conexión.");
-    }
+    reactionMutation.mutate({ commentId, reaction: 'like' });
   };
 
   const handleDislike = async (commentId) => {
-    try {
-      if (!axiosInstance) {
-        throw new Error("axiosInstance no está definido en el contexto.");
-      }
-
-      const response = await axiosInstance.post(`/${entityType}/${entityId}/comments/${commentId}/dislike`);
-
-      const updatedComment = response.data.comment;
-
-      const updatedComments = comments.map(comment => {
-        if (comment._id === updatedComment._id) {
-          return updatedComment;
-        }
-        return comment;
-      });
-
-      const sortedComments = sortComments(updatedComments);
-      onAddComment(sortedComments);
-    } catch (error) {
-      console.error("Error al dar dislike:", error.message);
-      Alert.alert("Error", "No se pudo dar dislike al comentario. Verifica la conexión.");
-    }
+    reactionMutation.mutate({ commentId, reaction: 'dislike' });
   };
+
+  const isInitialLoading = commentsQuery.isLoading && visibleComments.length === 0;
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Comentarios</Text>
       <View style={styles.commentsContainer}>
-        {isLoading && comments.length === 0 ? (
+        {isInitialLoading ? (
           <SkeletonList count={3} />
-        ) : Array.isArray(comments) && comments.length === 0 ? (
+        ) : visibleComments.length === 0 ? (
           <Text style={styles.noCommentsText}>No hay comentarios aún.</Text>
         ) : (
-          comments.map((comment) => {
+          visibleComments.map((comment) => {
             const likedBy = Array.isArray(comment.liked_by) ? comment.liked_by : [];
             const dislikedBy = Array.isArray(comment.disliked_by) ? comment.disliked_by : [];
 
@@ -228,9 +243,9 @@ export default function CommentSection({ entityType, entityId, comments = [], on
             );
           })
         )}
-        {page < totalPages && (
+        {commentsQuery.hasNextPage && (
           <TouchableOpacity style={styles.loadMoreButton} onPress={handleLoadMore}>
-            <Text style={styles.loadMoreText}>Cargar más comentarios</Text>
+            <Text style={styles.loadMoreText}>{commentsQuery.isFetchingNextPage ? 'Cargando...' : 'Cargar más comentarios'}</Text>
           </TouchableOpacity>
         )}
       </View>

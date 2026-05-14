@@ -3,7 +3,6 @@ import {
   View, 
   Text, 
   StyleSheet, 
-  Image, 
   TouchableOpacity, 
   Animated,
   ActivityIndicator,
@@ -13,17 +12,25 @@ import {
   TextInput,
   useWindowDimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useNavigation } from '@react-navigation/native';
+import { useQuery } from '@tanstack/react-query';
 import CommentSection from '../components/CommentSection';
 import FavoriteButton from '../components/FavoriteButton';
 import StarRating from '../components/StarRating';
 import { AuthContext } from '../context/AuthContext';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { DetailSkeleton } from '../components/Skeleton';
+import { queryKeys } from '../api/queryKeys';
+import { useToast } from '../context/ToastContext';
+import { useFavorites } from '../hooks/useFavorites';
+import { useRating } from '../hooks/useRating';
+import { getApiErrorMessage } from '../utils/errors';
 
 const AlbumDetailsScreen = ({ route }) => {
   const navigation = useNavigation();
+  const { showToast } = useToast();
   const { height: screenHeight } = useWindowDimensions();
   const scrollY = useRef(new Animated.Value(0)).current;
   const { axiosInstance, user } = useContext(AuthContext);
@@ -42,6 +49,20 @@ const AlbumDetailsScreen = ({ route }) => {
 
   const [newComment, setNewComment] = useState('');
 
+  const { favorites, invalidateFavorites } = useFavorites();
+  const userRatingQuery = useRating({ entityType: 'album', entityId: album.id, enabled: Boolean(albumData) });
+
+  const albumDetailsQuery = useQuery({
+    queryKey: queryKeys.albumDetails(album.id),
+    enabled: Boolean(album.id && axiosInstance),
+    queryFn: async () => {
+      const response = await axiosInstance.get('/album_details', {
+        params: { album_id: album.id },
+      });
+      return response.data.album;
+    },
+  });
+
   const imageScale = scrollY.interpolate({
     inputRange: [-100, 0],
     outputRange: [1.5, 1],
@@ -50,72 +71,32 @@ const AlbumDetailsScreen = ({ route }) => {
   });
 
   useEffect(() => {
-    const fetchAlbumData = async () => {
-      try {
-        const response = await axiosInstance.get(`/album_details`, {
-          params: {
-            album_id: album.id,
-            cacheBust: new Date().getTime()
-          },
-        });
-
-        setAlbumData(response.data.album);
-        setAverageRating(response.data.album.averageRating || 0);
-        setRatingCount(response.data.album.ratingCount || 0);
-      } catch (error) {
-        console.error("Error al cargar los datos del álbum:", error);
-        Alert.alert("Error", "Hubo un problema al cargar los datos del álbum. Por favor, intenta nuevamente.");
-      }
-    };
-
-    fetchAlbumData();
-  }, [album, axiosInstance]);
+    if (!albumDetailsQuery.data) return;
+    setAlbumData(albumDetailsQuery.data);
+    setAverageRating(albumDetailsQuery.data.averageRating || 0);
+    setRatingCount(albumDetailsQuery.data.ratingCount || 0);
+  }, [albumDetailsQuery.data]);
 
   useEffect(() => {
-    const checkIfFavorite = async () => {
-      try {
-        const response = await axiosInstance.get('/get_favorites');
-        const favorites = response.data.favorites;
-        const isFav = favorites.some(
-          (fav) => fav.entityId === album.id && fav.entityType === 'album'
-        );
-        setIsFavorite(isFav);
-      } catch (error) {
-        console.error('Error al verificar si es favorito:', error);
-      }
-    };
-
-    if (albumData) {
-      checkIfFavorite();
+    if (albumDetailsQuery.isError) {
+      showToast(getApiErrorMessage(albumDetailsQuery.error, 'Hubo un problema al cargar los datos del álbum.'));
     }
-  }, [albumData, axiosInstance, album.id]);
+  }, [albumDetailsQuery.error, albumDetailsQuery.isError, showToast]);
 
   useEffect(() => {
-    const fetchUserRating = async () => {
-      try {
-        const response = await axiosInstance.get('/get_user_rating', {
-          params: {
-            entityType: 'album',
-            entityId: album.id,
-          },
-        });
+    setIsFavorite(favorites.some((fav) => fav.entityId === album.id && fav.entityType === 'album'));
+  }, [album.id, favorites]);
 
-        if (response.data.rating) {
-          setUserRating(response.data.rating);
-        }
-      } catch (error) {
-        console.error('Error al obtener la calificación del usuario:', error);
-      }
-    };
-
-    if (albumData) {
-      fetchUserRating();
-    }
-  }, [albumData, axiosInstance, album.id]);
+  useEffect(() => {
+    if (userRatingQuery.data) setUserRating(userRatingQuery.data);
+  }, [userRatingQuery.data]);
 
   const handleToggleFavorite = async () => {
+    const nextFavorite = !isFavorite;
+    setIsFavorite(nextFavorite);
+
     try {
-      if (isFavorite) {
+      if (!nextFavorite) {
         // Eliminar de favoritos
         await axiosInstance.post('/remove_favorite', {
           entityType: 'album',
@@ -130,10 +111,11 @@ const AlbumDetailsScreen = ({ route }) => {
           image: albumData.cover_image,
         });
       }
-      setIsFavorite(!isFavorite);
+      invalidateFavorites();
     } catch (error) {
+      setIsFavorite(!nextFavorite);
       console.error('Error al actualizar favorito:', error);
-      Alert.alert('Error', 'Hubo un problema al actualizar los favoritos.');
+      showToast('No se pudieron actualizar los favoritos.');
     }
   };
 
@@ -154,26 +136,20 @@ const AlbumDetailsScreen = ({ route }) => {
       return;
     }
 
+    const previousRating = userRating;
     try {
-      const response = await axiosInstance.post('/rate_entity', {
-        entityType: 'album',
-        entityId: album.id,
-        rating: rating,
+      await userRatingQuery.rateEntity({
+        rating,
+        currentRating: previousRating,
+        setUserRating,
+        onSuccess: (data) => {
+          setAverageRating(data.averageRating);
+          setRatingCount(data.ratingCount);
+        },
       });
-
-      Alert.alert('Éxito', 'Tu calificación ha sido registrada.');
-
-      // Actualizar el promedio y el conteo de calificaciones
-      setAverageRating(response.data.averageRating);
-      setRatingCount(response.data.ratingCount);
-      setUserRating(rating);
     } catch (error) {
-      if (error.response && error.response.data.message) {
-        Alert.alert('Error', error.response.data.message);
-      } else {
-        console.error('Error al calificar:', error);
-        Alert.alert('Error', 'No se pudo registrar tu calificación.');
-      }
+      setUserRating(previousRating);
+      showToast(getApiErrorMessage(error, 'No se pudo registrar tu calificación.'));
     }
   };
 
@@ -229,6 +205,10 @@ const AlbumDetailsScreen = ({ route }) => {
               source={{ uri: albumData.cover_image || 'https://via.placeholder.com/500' }}  
               style={styles.blurredBackground}
               blurRadius={50}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={220}
+              placeholder={require('../assets/default_picture.png')}
               onLoadStart={() => setLoadingAlbumImage(true)}
               onLoadEnd={() => setLoadingAlbumImage(false)}
             />
@@ -250,6 +230,10 @@ const AlbumDetailsScreen = ({ route }) => {
             <Image 
               source={{ uri: albumData.cover_image || 'https://via.placeholder.com/500' }}  
               style={styles.albumImage}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={220}
+              placeholder={require('../assets/default_picture.png')}
               onLoadStart={() => setLoadingAlbumImage(true)}
               onLoadEnd={() => setLoadingAlbumImage(false)}
             />
@@ -391,7 +375,6 @@ const styles = StyleSheet.create({
   albumImage: { 
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
   },
   contentContainer: {
     paddingHorizontal: 0, 

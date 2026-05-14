@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { Asset } from 'expo-asset';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import AppNavigator from './AppNavigator';
 import { AuthProvider, AuthContext } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
 import { NavigationContainer } from '@react-navigation/native';
 import LoadingScreen from './components/LoadingScreen';
 import { useContext } from 'react';
+import { queryClient, queryPersister, shouldPersistQuery } from './api/queryClient';
 
 const PRELOADED_ASSETS = [
   require('./assets/Logo.png'),
@@ -14,12 +17,25 @@ const PRELOADED_ASSETS = [
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <AuthProvider>
-        <StatusBar style="light" />
-        <Main />
-      </AuthProvider>
-    </NavigationContainer>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{
+        persister: queryPersister,
+        maxAge: 1000 * 60 * 60 * 12,
+        dehydrateOptions: {
+          shouldDehydrateQuery: shouldPersistQuery,
+        },
+      }}
+    >
+      <NavigationContainer>
+        <ToastProvider>
+          <AuthProvider>
+            <StatusBar style="light" />
+            <Main />
+          </AuthProvider>
+        </ToastProvider>
+      </NavigationContainer>
+    </PersistQueryClientProvider>
   );
 }
 
