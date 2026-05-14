@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, PanResponder, Platform, Pressable, Text, StyleSheet, View } from 'react-native';
+import { Animated, PanResponder, Platform, Pressable, Text, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,17 +8,21 @@ import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 
 const TABS = ['HomeScreen', 'SearchScreen', 'ProfileScreen'];
 
-const MenuBar = () => {
-  const navigation = useNavigation();
+const MenuBar = ({ scrollY, tabBarProps }) => {
+  const fallbackNavigation = useNavigation();
   const route = useRoute();
+  const navigation = tabBarProps?.navigation || fallbackNavigation;
+  const activeRouteName = tabBarProps
+    ? tabBarProps.state.routes[tabBarProps.state.index]?.name
+    : route.name;
   const [barWidth, setBarWidth] = useState(0);
-  const activeIndexAnim = useRef(new Animated.Value(Math.max(TABS.indexOf(route.name), 0))).current;
+  const activeIndexAnim = useRef(new Animated.Value(Math.max(TABS.indexOf(activeRouteName), 0))).current;
   const thumbPulseAnim = useRef(new Animated.Value(0)).current;
   const itemWidth = barWidth > 0 ? (barWidth - 24) / TABS.length : 0;
   const canUseLiquidGlass = Platform.OS === 'ios' && isGlassEffectAPIAvailable();
 
   useEffect(() => {
-    const activeIndex = Math.max(TABS.indexOf(route.name), 0);
+    const activeIndex = Math.max(TABS.indexOf(activeRouteName), 0);
     thumbPulseAnim.setValue(0);
 
     Animated.parallel([
@@ -45,15 +49,31 @@ const MenuBar = () => {
         }),
       ]),
     ]).start();
-  }, [activeIndexAnim, route.name, thumbPulseAnim]);
+  }, [activeIndexAnim, activeRouteName, thumbPulseAnim]);
 
   // Función para determinar si una pestaña está activa
-  const getIconColor = (tab) => (route.name === tab ? '#FFFFFF' : 'rgba(255,255,255,0.72)');
+  const getIconColor = (tab) => (activeRouteName === tab ? '#FFFFFF' : 'rgba(255,255,255,0.72)');
   const navigateToTab = useCallback((tab) => {
-    if (route.name !== tab) {
-      navigation.navigate(tab);
+    if (activeRouteName === tab) {
+      return;
     }
-  }, [navigation, route.name]);
+
+    if (tabBarProps) {
+      const targetRoute = tabBarProps.state.routes.find((item) => item.name === tab);
+      const event = navigation.emit({
+        type: 'tabPress',
+        target: targetRoute?.key,
+        canPreventDefault: true,
+      });
+
+      if (!event.defaultPrevented) {
+        navigation.navigate(tab);
+      }
+      return;
+    }
+
+    navigation.navigate(tab);
+  }, [activeRouteName, navigation, tabBarProps]);
 
   const getTouchProgress = useCallback((locationX) => {
     if (!barWidth || !itemWidth) return 0;
@@ -90,7 +110,7 @@ const MenuBar = () => {
     },
     onPanResponderRelease: (event) => settleToNearestTab(event.nativeEvent.locationX),
     onPanResponderTerminate: () => {
-      const activeIndex = Math.max(TABS.indexOf(route.name), 0);
+      const activeIndex = Math.max(TABS.indexOf(activeRouteName), 0);
       Animated.spring(activeIndexAnim, {
         toValue: activeIndex,
         useNativeDriver: true,
@@ -99,7 +119,7 @@ const MenuBar = () => {
         mass: 0.85,
       }).start();
     },
-  }), [activeIndexAnim, getTouchProgress, route.name, settleToNearestTab]);
+  }), [activeIndexAnim, activeRouteName, getTouchProgress, settleToNearestTab]);
 
   const activeTranslateX = activeIndexAnim.interpolate({
     inputRange: [0, 1, 2],
@@ -121,90 +141,43 @@ const MenuBar = () => {
     outputRange: [0.22, 0.5],
   });
 
-  const getReflectionBlobStyle = (blobIndex) => {
-    const inputRange = [0, 1, 2];
-    const translateXStops = [
-      [-itemWidth * 0.35, itemWidth * 0.28, itemWidth * 1.25],
-      [itemWidth * 0.2, itemWidth * 0.92, itemWidth * 1.65],
-      [itemWidth * 1.85, itemWidth * 1.18, itemWidth * 0.52],
-    ];
-    const translateYStops = [
-      [2, -10, 6],
-      [-8, 4, -6],
-      [8, -4, -10],
-    ];
-    const scaleStops = [
-      [1.15, 0.92, 0.72],
-      [0.86, 1.18, 0.96],
-      [0.72, 0.92, 1.2],
-    ];
-    const opacityStops = [
-      [0.54, 0.4, 0.26],
-      [0.36, 0.56, 0.42],
-      [0.25, 0.42, 0.58],
-    ];
-
-    return {
-      opacity: activeIndexAnim.interpolate({
-        inputRange,
-        outputRange: opacityStops[blobIndex],
-        extrapolate: 'clamp',
-      }),
-      transform: [
-        {
-          translateX: activeIndexAnim.interpolate({
-            inputRange,
-            outputRange: translateXStops[blobIndex],
-            extrapolate: 'clamp',
-          }),
-        },
-        {
-          translateY: activeIndexAnim.interpolate({
-            inputRange,
-            outputRange: translateYStops[blobIndex],
-            extrapolate: 'clamp',
-          }),
-        },
-        {
-          scale: activeIndexAnim.interpolate({
-            inputRange,
-            outputRange: scaleStops[blobIndex],
-            extrapolate: 'clamp',
-          }),
-        },
-      ],
-    };
-  };
-
   const getTabAnimatedStyle = (tabIndex) => {
     const inputRange = TABS.map((_, index) => index);
     return {
-      transform: [
-        {
-          scale: activeIndexAnim.interpolate({
-            inputRange,
-            outputRange: inputRange.map((index) => (index === tabIndex ? 1.08 : 0.92)),
-            extrapolate: 'clamp',
-          }),
-        },
-        {
-          translateY: activeIndexAnim.interpolate({
-            inputRange,
-            outputRange: inputRange.map((index) => (index === tabIndex ? -2 : 2)),
-            extrapolate: 'clamp',
-          }),
-        },
-      ],
       opacity: activeIndexAnim.interpolate({
         inputRange,
-        outputRange: inputRange.map((index) => (index === tabIndex ? 1 : 0.72)),
+        outputRange: inputRange.map((index) => (index === tabIndex ? 1 : 0.68)),
         extrapolate: 'clamp',
       }),
     };
   };
 
+  const scrollDrivenStyle = scrollY ? {
+    opacity: scrollY.interpolate({
+      inputRange: [0, 140],
+      outputRange: [0.92, 0.72],
+      extrapolate: 'clamp',
+    }),
+    transform: [
+      {
+        translateY: scrollY.interpolate({
+          inputRange: [0, 140],
+          outputRange: [0, 18],
+          extrapolate: 'clamp',
+        }),
+      },
+      {
+        scale: scrollY.interpolate({
+          inputRange: [0, 140],
+          outputRange: [1, 0.9],
+          extrapolate: 'clamp',
+        }),
+      },
+    ],
+  } : null;
+
   return (
-    <View style={styles.menuShell} pointerEvents="box-none" {...panResponder.panHandlers}>
+    <Animated.View style={[styles.menuShell, scrollDrivenStyle]} pointerEvents="box-none" {...panResponder.panHandlers}>
       <BlurView intensity={Platform.OS === 'ios' ? 55 : 35} tint="dark" style={styles.menuBar}>
         {canUseLiquidGlass ? (
           <GlassView
@@ -217,8 +190,8 @@ const MenuBar = () => {
         ) : null}
         <LinearGradient
           colors={canUseLiquidGlass
-            ? ['rgba(255,255,255,0.18)', 'rgba(124,58,237,0.10)', 'rgba(8,8,12,0.18)']
-            : ['rgba(236,218,255,0.32)', 'rgba(124,58,237,0.22)', 'rgba(37,20,54,0.66)']}
+            ? ['rgba(255,255,255,0.10)', 'rgba(124,58,237,0.06)', 'rgba(8,8,12,0.10)']
+            : ['rgba(236,218,255,0.18)', 'rgba(124,58,237,0.12)', 'rgba(37,20,54,0.34)']}
           locations={[0, 0.52, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -226,25 +199,6 @@ const MenuBar = () => {
           onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
           {...panResponder.panHandlers}
         >
-          {itemWidth > 0 ? (
-            <View pointerEvents="none" style={styles.colorReflectionLayer}>
-              <Animated.View style={[styles.reflectionBlob, styles.reflectionBlobHome, getReflectionBlobStyle(0)]} />
-              <Animated.View style={[styles.reflectionBlob, styles.reflectionBlobSearch, getReflectionBlobStyle(1)]} />
-              <Animated.View style={[styles.reflectionBlob, styles.reflectionBlobProfile, getReflectionBlobStyle(2)]} />
-              <Animated.View
-                style={[
-                  styles.reflectionWake,
-                  {
-                    width: itemWidth * 1.22,
-                    transform: [
-                      { translateX: activeTranslateX },
-                      { scaleX: thumbScaleX },
-                    ],
-                  },
-                ]}
-              />
-            </View>
-          ) : null}
           {itemWidth > 0 ? (
             <Animated.View
               pointerEvents="none"
@@ -274,7 +228,7 @@ const MenuBar = () => {
             onPress={() => navigateToTab('HomeScreen')}
             accessibilityRole="tab"
             accessibilityLabel="Home"
-            accessibilityState={{ selected: route.name === 'HomeScreen' }}
+            accessibilityState={{ selected: activeRouteName === 'HomeScreen' }}
           >
             <Animated.View style={[styles.menuItemContent, getTabAnimatedStyle(0)]}>
               <Icon name="home" size={23} color={getIconColor('HomeScreen')} />
@@ -287,7 +241,7 @@ const MenuBar = () => {
             onPress={() => navigateToTab('SearchScreen')}
             accessibilityRole="tab"
             accessibilityLabel="Search"
-            accessibilityState={{ selected: route.name === 'SearchScreen' }}
+            accessibilityState={{ selected: activeRouteName === 'SearchScreen' }}
           >
             <Animated.View style={[styles.menuItemContent, getTabAnimatedStyle(1)]}>
               <Icon name="search" size={23} color={getIconColor('SearchScreen')} />
@@ -300,7 +254,7 @@ const MenuBar = () => {
             onPress={() => navigateToTab('ProfileScreen')}
             accessibilityRole="tab"
             accessibilityLabel="Profile"
-            accessibilityState={{ selected: route.name === 'ProfileScreen' }}
+            accessibilityState={{ selected: activeRouteName === 'ProfileScreen' }}
           >
             <Animated.View style={[styles.menuItemContent, getTabAnimatedStyle(2)]}>
               <Icon name="user" size={23} color={getIconColor('ProfileScreen')} />
@@ -309,7 +263,7 @@ const MenuBar = () => {
           </Pressable>
         </LinearGradient>
       </BlurView>
-    </View>
+    </Animated.View>
   );
 };
 
@@ -318,22 +272,22 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 18,
     right: 18,
-    bottom: Platform.OS === 'ios' ? 28 : 18,
+    bottom: Platform.OS === 'ios' ? 12 : 8,
     zIndex: 999,
     borderRadius: 36,
-    shadowColor: '#A071CA',
-    shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.28,
-    shadowRadius: 28,
-    elevation: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 10,
   },
   menuBar: {
     height: 74,
     borderRadius: 36,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(224,197,255,0.32)',
-    backgroundColor: 'rgba(28,20,38,0.58)',
+    borderColor: 'rgba(224,197,255,0.18)',
+    backgroundColor: 'rgba(18,14,24,0.28)',
   },
   nativeGlassLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -347,37 +301,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     position: 'relative',
   },
-  colorReflectionLayer: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
-  },
-  reflectionBlob: {
-    position: 'absolute',
-    top: -20,
-    width: 138,
-    height: 116,
-    borderRadius: 70,
-  },
-  reflectionBlobHome: {
-    left: 0,
-    backgroundColor: 'rgba(255,54,94,0.76)',
-  },
-  reflectionBlobSearch: {
-    left: 0,
-    backgroundColor: 'rgba(180,90,255,0.72)',
-  },
-  reflectionBlobProfile: {
-    left: 0,
-    backgroundColor: 'rgba(255,186,63,0.56)',
-  },
-  reflectionWake: {
-    position: 'absolute',
-    left: 8,
-    top: 7,
-    bottom: 7,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
   liquidThumb: {
     position: 'absolute',
     left: 12,
@@ -387,10 +310,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
-    shadowColor: '#D8B4FE',
+    shadowColor: '#A071CA',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.38,
-    shadowRadius: 20,
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
   },
   liquidGlow: {
     position: 'absolute',
@@ -399,23 +322,25 @@ const styles = StyleSheet.create({
     top: -12,
     bottom: -12,
     borderRadius: 40,
-    backgroundColor: 'rgba(190,124,255,0.48)',
+    backgroundColor: 'rgba(190,124,255,0.2)',
   },
   liquidThumbGradient: {
     flex: 1,
-    backgroundColor: 'rgba(168,85,247,0.22)',
+    backgroundColor: 'rgba(168,85,247,0.12)',
   },
   menuItem: {
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
-    height: 54,
+    height: '100%',
     borderRadius: 27,
     zIndex: 2,
   },
   menuItemContent: {
     alignItems: 'center',
     justifyContent: 'center',
+    height: 58,
+    paddingTop: 2,
   },
   menuText: {
     fontSize: 11,

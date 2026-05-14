@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useState, useEffect, useContext, useRef, useMemo, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -11,14 +11,12 @@ import {
   Alert,
   TextInput,
   Modal,
-  Keyboard,
-  TouchableWithoutFeedback,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
-import MenuBar from '../components/MenuBar'; 
 import CommentSection from '../components/CommentSection';
 import { AuthContext } from '../context/AuthContext';
 import LoadingScreen from '../components/LoadingScreen';
+import { SkeletonCard, SkeletonList } from '../components/Skeleton';
 
 export default function ProfileScreen({ navigation }) {
   const { user, isLoading, axiosInstance, logout, setUser } = useContext(AuthContext);
@@ -26,6 +24,8 @@ export default function ProfileScreen({ navigation }) {
   const [comments, setComments] = useState([]);
   const [followingUsers, setFollowingUsers] = useState([]); // Nuevo estado para usuarios seguidos
   const [isRefreshingUser, setIsRefreshingUser] = useState(false);
+  const [isLoadingFavorites, setIsLoadingFavorites] = useState(false);
+  const [isLoadingFollowing, setIsLoadingFollowing] = useState(false);
 
   const [isEditingUsername, setIsEditingUsername] = useState(false);
   const [newUsername, setNewUsername] = useState(user?.username || '');
@@ -34,9 +34,11 @@ export default function ProfileScreen({ navigation }) {
 
   const entityType = "profile";
   const entityId = user && (user._id || user.id) ? (user._id || user.id).toString() : '';
-  const profileImageSource = user?.profile_picture
-    ? { uri: user.profile_picture }
-    : require('../assets/default_picture.png');
+  const profileImageSource = useMemo(() => (
+    user?.profile_picture
+      ? { uri: user.profile_picture }
+      : require('../assets/default_picture.png')
+  ), [user?.profile_picture]);
 
   const scrollY = useRef(new Animated.Value(0)).current;
 
@@ -66,12 +68,16 @@ export default function ProfileScreen({ navigation }) {
         return;
       }
 
+      setIsLoadingFavorites(true);
       try {
         const response = await axiosInstance.get('/get_favorites');
         setFavorites(response.data.favorites);
       } catch (error) {
+        if (error.response?.status === 401) return;
         console.error('Error al obtener favoritos:', error);
         Alert.alert('Error', 'Hubo un problema al obtener tus favoritos.');
+      } finally {
+        setIsLoadingFavorites(false);
       }
     };
 
@@ -86,13 +92,17 @@ export default function ProfileScreen({ navigation }) {
         return;
       }
 
+      setIsLoadingFollowing(true);
       try {
         const response = await axiosInstance.post('/get_following_details', {
           ids: user.following
         });
         setFollowingUsers(response.data.users || []);
       } catch (error) {
+        if (error.response?.status === 401) return;
         console.error('Error al obtener usuarios seguidos:', error);
+      } finally {
+        setIsLoadingFollowing(false);
       }
     };
     
@@ -101,9 +111,9 @@ export default function ProfileScreen({ navigation }) {
     }
   }, [axiosInstance, user]);
 
-  const favoriteAlbums = favorites.filter(fav => fav.entityType === 'album');
-  const favoriteSongs = favorites.filter(fav => fav.entityType === 'song');
-  const favoriteArtists = favorites.filter(fav => fav.entityType === 'artist');
+  const favoriteAlbums = useMemo(() => favorites.filter(fav => fav.entityType === 'album'), [favorites]);
+  const favoriteSongs = useMemo(() => favorites.filter(fav => fav.entityType === 'song'), [favorites]);
+  const favoriteArtists = useMemo(() => favorites.filter(fav => fav.entityType === 'artist'), [favorites]);
 
   const handleSaveUsername = async () => {
     if (!newUsername.trim()) {
@@ -128,6 +138,11 @@ export default function ProfileScreen({ navigation }) {
       return;
     }
 
+    if (!entityId) {
+      Alert.alert("Error", "No se pudo identificar tu perfil. Intenta iniciar sesión nuevamente.");
+      return;
+    }
+
     try {
       if (!axiosInstance) {
         throw new Error("axiosInstance no está definido en el contexto.");
@@ -146,11 +161,11 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  const handleAddComment = (updatedComments) => {
+  const handleAddComment = useCallback((updatedComments) => {
     setComments(updatedComments);
-  };
+  }, []);
 
-  const renderAlbumItem = ({ item }) => (
+  const renderAlbumItem = useCallback(({ item }) => (
     <TouchableOpacity 
       style={styles.carouselItem}
       onPress={() => {
@@ -160,9 +175,9 @@ export default function ProfileScreen({ navigation }) {
       <Image source={{ uri: item.image }} style={styles.albumImage} />
       <Text style={styles.albumTitle}>{item.name}</Text>
     </TouchableOpacity>
-  );
+  ), [navigation]);
 
-  const renderSongItem = ({ item }) => (
+  const renderSongItem = useCallback(({ item }) => (
     <TouchableOpacity 
       style={styles.songItem}
       onPress={() => {
@@ -174,9 +189,9 @@ export default function ProfileScreen({ navigation }) {
         <Text style={styles.songTitle}>{item.name}</Text>
       </View>
     </TouchableOpacity>
-  );
+  ), [navigation]);
 
-  const renderArtistItem = ({ item }) => (
+  const renderArtistItem = useCallback(({ item }) => (
     <TouchableOpacity 
       style={styles.carouselItem}
       onPress={() => {
@@ -186,9 +201,9 @@ export default function ProfileScreen({ navigation }) {
       <Image source={{ uri: item.image }} style={styles.albumImage} />
       <Text style={styles.albumTitle}>{item.name}</Text>
     </TouchableOpacity>
-  );
+  ), [navigation]);
 
-  const renderFollowingItem = ({ item }) => (
+  const renderFollowingItem = useCallback(({ item }) => (
     <TouchableOpacity 
       style={styles.followingItem}
       onPress={() => {
@@ -201,9 +216,9 @@ export default function ProfileScreen({ navigation }) {
       />
       <Text style={styles.followingUserName}>{item.username}</Text>
     </TouchableOpacity>
-  );
+  ), [navigation]);
 
-  const ListHeader = () => (
+  const listHeader = useMemo(() => (
     <>
       <View style={styles.topRectangle}>
         <View style={styles.profileInfoContainer}>
@@ -224,35 +239,49 @@ export default function ProfileScreen({ navigation }) {
 
       {/* Secciones de favoritos */}
       <Text style={styles.albumsTitle}>My Favorite Albums</Text>
-      <FlatList
-        data={favoriteAlbums}
-        renderItem={renderAlbumItem}
-        keyExtractor={(item) => item.entityId}
-        horizontal={true}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.carouselContainer}
-        snapToAlignment="center"
-        snapToInterval={180}
-        decelerationRate="fast"
-      />
+      {isLoadingFavorites ? (
+        <ProfileCarouselSkeleton />
+      ) : (
+        <FlatList
+          data={favoriteAlbums}
+          renderItem={renderAlbumItem}
+          keyExtractor={(item) => item.entityId}
+          horizontal={true}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.carouselContainer}
+          snapToAlignment="center"
+          snapToInterval={180}
+          decelerationRate="fast"
+        />
+      )}
 
       <Text style={styles.artistsTitle}>My Favorite Artists</Text>
-      <FlatList
-        data={favoriteArtists}
-        renderItem={renderArtistItem}
-        keyExtractor={(item) => item.entityId}
-        horizontal={true}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.carouselContainer}
-        snapToAlignment="center"
-        snapToInterval={180}
-        decelerationRate="fast"
-      />
+      {isLoadingFavorites ? (
+        <ProfileCarouselSkeleton />
+      ) : (
+        <FlatList
+          data={favoriteArtists}
+          renderItem={renderArtistItem}
+          keyExtractor={(item) => item.entityId}
+          horizontal={true}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.carouselContainer}
+          snapToAlignment="center"
+          snapToInterval={180}
+          decelerationRate="fast"
+        />
+      )}
 
       <Text style={styles.songsTitle}>My Favorite Songs</Text>      
-      {/* Sección de usuarios seguidos */}
+    </>
+  ), [favoriteAlbums, favoriteArtists, isLoadingFavorites, profileImageSource, renderAlbumItem, renderArtistItem, setIsEditingUsername, user?.username]);
+
+  const followingSection = useMemo(() => (
+    <>
       <Text style={styles.followingTitle}>People I Follow</Text>
-      {(!user.following || user.following.length === 0) ? (
+      {isLoadingFollowing ? (
+        <SkeletonList count={2} itemStyle={styles.followingSkeletonItem} />
+      ) : (!user.following || user.following.length === 0) ? (
         <Text style={styles.noFollowingText}>You are not following anyone.</Text>
       ) : (
         <FlatList
@@ -268,7 +297,7 @@ export default function ProfileScreen({ navigation }) {
         />
       )}
     </>
-  );
+  ), [followingUsers, isLoadingFollowing, renderFollowingItem, user?.following]);
 
   if (isLoading || isRefreshingUser) {
     return <LoadingScreen />;
@@ -283,8 +312,7 @@ export default function ProfileScreen({ navigation }) {
   }
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={styles.container}>
+    <View style={styles.container}>
         <TouchableOpacity 
           style={styles.logoutButton} 
           onPress={logout}
@@ -317,24 +345,28 @@ export default function ProfileScreen({ navigation }) {
         </Animated.View>
 
         <Animated.FlatList
-          ListHeaderComponent={ListHeader}
-          data={favoriteSongs}
+          ListHeaderComponent={listHeader}
+          data={isLoadingFavorites ? [] : favoriteSongs}
           renderItem={renderSongItem}
           keyExtractor={(item) => item.entityId}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
             { useNativeDriver: true }
           )}
           ListFooterComponent={
             <>
+              {isLoadingFavorites ? <SkeletonList count={3} itemStyle={styles.songSkeletonItem} /> : null}
+              {followingSection}
               <CommentSection 
                 entityType={entityType} 
                 entityId={entityId} 
                 comments={comments}
                 onAddComment={handleAddComment}
-                navigation={navigation}
+                showLoadErrorAlert={false}
               />
               <View style={styles.inputContainer}>
                 <TextInput
@@ -353,11 +385,6 @@ export default function ProfileScreen({ navigation }) {
             </>
           }
         />
-
-        <View style={styles.menuContainer}>
-          <MenuBar activeTab="ProfileScreen" />
-        </View>
-
         <Modal
           transparent={true}
           animationType="slide"
@@ -385,10 +412,17 @@ export default function ProfileScreen({ navigation }) {
             </View>
           </View>
         </Modal>
-      </View>
-    </TouchableWithoutFeedback>
+    </View>
   );
 }
+
+const ProfileCarouselSkeleton = () => (
+  <View style={styles.profileSkeletonRow}>
+    {Array.from({ length: 3 }).map((_, index) => (
+      <SkeletonCard key={index} style={styles.profileSkeletonCard} imageStyle={styles.profileSkeletonImage} />
+    ))}
+  </View>
+);
 
 const styles = StyleSheet.create({
   container: {
@@ -481,6 +515,26 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     paddingRight: 10,
   },
+  profileSkeletonRow: {
+    flexDirection: 'row',
+    gap: 14,
+    paddingHorizontal: 20,
+    marginBottom: 6,
+  },
+  profileSkeletonCard: {
+    width: 150,
+  },
+  profileSkeletonImage: {
+    height: 170,
+  },
+  followingSkeletonItem: {
+    marginHorizontal: 15,
+    marginBottom: 10,
+  },
+  songSkeletonItem: {
+    marginHorizontal: 15,
+    marginBottom: 10,
+  },
   carouselItem: {
     alignItems: 'center',
     marginHorizontal: 10,  
@@ -536,13 +590,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
-  },
-  menuContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 999,
   },
   stickyHeader: {
     position: 'absolute',

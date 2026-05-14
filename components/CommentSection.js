@@ -1,32 +1,41 @@
 // src/components/CommentSection.js
 
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
   Image, 
   Alert, 
-  ActivityIndicator,
   TouchableOpacity,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { AuthContext } from '../context/AuthContext';
+import { SkeletonList } from './Skeleton';
 
-export default function CommentSection({ entityType, entityId, comments = [], onAddComment, navigation }) { 
+export default function CommentSection({ entityType, entityId, comments = [], onAddComment, showLoadErrorAlert = true }) { 
   const { axiosInstance, user } = useContext(AuthContext);
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const commentsRef = useRef(comments);
+  const onAddCommentRef = useRef(onAddComment);
+
+  useEffect(() => {
+    commentsRef.current = comments;
+  }, [comments]);
+
+  useEffect(() => {
+    onAddCommentRef.current = onAddComment;
+  }, [onAddComment]);
+
   const sortComments = (commentsList) => {
     return [...commentsList].sort((a, b) => b.likes - a.likes);
   };
 
   const fetchComments = useCallback(async (pageNumber) => {
     if (!entityId) {
-      console.error("Error: entityId está vacío. No se puede obtener los comentarios.");
-      Alert.alert("Error", "ID de entidad inválido.");
       return;
     };
 
@@ -35,7 +44,7 @@ export default function CommentSection({ entityType, entityId, comments = [], on
         throw new Error("axiosInstance no está definido en el contexto.");
       }
 
-      if (pageNumber === 1) setIsLoading(true);
+      if (pageNumber === 1 && commentsRef.current.length === 0) setIsLoading(true);
 
       const response = await axiosInstance.get(`/${entityType}/${entityId}/comments`, {
         params: {
@@ -45,27 +54,29 @@ export default function CommentSection({ entityType, entityId, comments = [], on
       });
       if (pageNumber === 1) {
         const sortedComments = sortComments(response.data.comments || []);
-        onAddComment(sortedComments);
+        onAddCommentRef.current(sortedComments);
       } else {
-        const combinedComments = [...comments, ...(response.data.comments || [])];
+        const combinedComments = [...commentsRef.current, ...(response.data.comments || [])];
         const sortedComments = sortComments(combinedComments);
-        onAddComment(sortedComments);
+        onAddCommentRef.current(sortedComments);
       }
 
       setTotalPages(response.data.pagination.total_pages);
       setPage(pageNumber);
     } catch (error) {
       console.error("Error al obtener los comentarios:", error.message);
-      Alert.alert("Error", "No se pudieron cargar los comentarios. Verifica la conexión.");
+      if (showLoadErrorAlert) {
+        Alert.alert("Error", "No se pudieron cargar los comentarios. Verifica la conexión.");
+      }
     } finally {
       if (pageNumber === 1) setIsLoading(false);
     }
-  }, [axiosInstance, comments, entityId, entityType, onAddComment]);
+  }, [axiosInstance, entityId, entityType, showLoadErrorAlert]);
 
   useEffect(() => {
     const fetchCommentsInitial = async () => {
       try {
-        if (!user) {
+        if (!user || !entityId) {
           return;
         }
         fetchComments(1);
@@ -76,7 +87,7 @@ export default function CommentSection({ entityType, entityId, comments = [], on
     };
 
     fetchCommentsInitial();
-  }, [fetchComments, navigation, user]);
+  }, [entityId, fetchComments, user]);
 
   const handleLoadMore = () => {
     if (page < totalPages && !isLoading) {
@@ -150,19 +161,13 @@ export default function CommentSection({ entityType, entityId, comments = [], on
     }
   };
 
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#A071CA" />
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Comentarios</Text>
       <View style={styles.commentsContainer}>
-        {Array.isArray(comments) && comments.length === 0 ? (
+        {isLoading && comments.length === 0 ? (
+          <SkeletonList count={3} />
+        ) : Array.isArray(comments) && comments.length === 0 ? (
           <Text style={styles.noCommentsText}>No hay comentarios aún.</Text>
         ) : (
           comments.map((comment) => {
@@ -315,9 +320,5 @@ const styles = StyleSheet.create({
   loadMoreText: {
     color: '#A071CA',
     fontWeight: 'bold',
-  },
-  loadingContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 });

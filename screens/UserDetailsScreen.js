@@ -10,7 +10,6 @@ import {
   Platform,
   Alert,
   TextInput,
-  ActivityIndicator,
   Keyboard,
   TouchableWithoutFeedback
 } from 'react-native';
@@ -18,6 +17,7 @@ import Icon from 'react-native-vector-icons/FontAwesome';
 import MenuBar from '../components/MenuBar'; 
 import CommentSection from '../components/CommentSection';
 import { AuthContext } from '../context/AuthContext';
+import { DetailSkeleton } from '../components/Skeleton';
 
 export default function UserDetailsScreen({ route, navigation }) {
   const { profileId } = route.params;
@@ -147,11 +147,7 @@ export default function UserDetailsScreen({ route, navigation }) {
   };
 
   if (isLoadingProfile) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#A071CA" />
-      </View>
-    );
+    return <DetailSkeleton />;
   }
 
   if (error || !profileData) {

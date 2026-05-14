@@ -14,9 +14,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
-import MenuBar from '../components/MenuBar';
 import LoadingScreen from '../components/LoadingScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SkeletonCard } from '../components/Skeleton';
 
 // Datos estáticos para el carrusel superior
 const DATA = [
@@ -73,7 +73,7 @@ export default function HomeScreen({ navigation }) {
   const [moreAlbumsData, setMoreAlbumsData] = useState([]);
   const [moreArtistsData, setMoreArtistsData] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isLoadingHome, setIsLoadingHome] = useState(true);
+  const [isFetchingHome, setIsFetchingHome] = useState(false);
   const [tabData, setTabData] = useState([]);
   const carouselRef = useRef();
   const tabScrollViewRef = useRef();
@@ -82,6 +82,7 @@ export default function HomeScreen({ navigation }) {
   const [recentlyListenedData, setRecentlyListenedData] = useState([]);
 
   const fetchData = useCallback(async () => {
+    setIsFetchingHome(true);
     try {
       if (!axiosInstance) {
         throw new Error("axiosInstance no está definido en el contexto.");
@@ -140,7 +141,7 @@ export default function HomeScreen({ navigation }) {
       console.error("Error fetching data:", error);
       Alert.alert("Error", "Hubo un problema al cargar los datos. Por favor, intenta nuevamente.");
     } finally {
-      setIsLoadingHome(false);
+      setIsFetchingHome(false);
     }
   }, [axiosInstance]);
 
@@ -160,7 +161,6 @@ export default function HomeScreen({ navigation }) {
           setRecentlyListenedData(parsedCache.recentlyListenedData || []);
           setMoreAlbumsData(parsedCache.moreAlbumsData || []);
           setMoreArtistsData(parsedCache.moreArtistsData || []);
-          setIsLoadingHome(false);
         } else {
           fetchData();
         }
@@ -171,7 +171,7 @@ export default function HomeScreen({ navigation }) {
     };
 
     initialize();
-  }, [fetchData, navigation, user]);
+  }, [fetchData, user]);
 
   useEffect(() => {
     if (activeTab === "News") {
@@ -221,13 +221,13 @@ export default function HomeScreen({ navigation }) {
 
   const logoScale = headerScrollY.interpolate({
     inputRange: [0, 90],
-    outputRange: [1, 0.62],
+    outputRange: [1, 0.42],
     extrapolate: 'clamp',
   });
 
   const headerOpacity = headerScrollY.interpolate({
     inputRange: [0, 90],
-    outputRange: [1, 0.86],
+    outputRange: [1, 0],
     extrapolate: 'clamp',
   });
 
@@ -261,10 +261,20 @@ export default function HomeScreen({ navigation }) {
     </TouchableOpacity>
   );
 
+  const renderCardSkeletonRow = () => (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.extraSectionList}>
+      {Array.from({ length: 4 }).map((_, index) => (
+        <SkeletonCard key={index} style={styles.largeContentCard} imageStyle={styles.largeContentImage} />
+      ))}
+    </ScrollView>
+  );
+
   const renderHorizontalSection = (title, data, renderItem, emptyText) => (
     <View style={styles.extraSection}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      {data.length > 0 ? (
+      {isFetchingHome && data.length === 0 ? (
+        renderCardSkeletonRow()
+      ) : data.length > 0 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.extraSectionList}>
           {data.map(renderItem)}
         </ScrollView>
@@ -274,12 +284,12 @@ export default function HomeScreen({ navigation }) {
     </View>
   );
 
-  if (isAuthLoading || isLoadingHome) {
+  if (isAuthLoading) {
     return <LoadingScreen />;
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView edges={['bottom']} style={styles.container}>
       <Animated.ScrollView 
         contentContainerStyle={styles.contentContainer}
         onScroll={Animated.event(
@@ -290,10 +300,24 @@ export default function HomeScreen({ navigation }) {
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
         }
-        stickyHeaderIndices={[0]}
       >
-        {/* Logo de la aplicación - Este será el sticky header */}
-        <Animated.View style={[styles.stickyHeader, { opacity: headerOpacity }]}> 
+        <Animated.View
+          style={[
+            styles.stickyHeader,
+            {
+              opacity: headerOpacity,
+              transform: [
+                {
+                  translateY: headerScrollY.interpolate({
+                    inputRange: [0, 90],
+                    outputRange: [0, -28],
+                    extrapolate: 'clamp',
+                  }),
+                },
+              ],
+            },
+          ]}
+        > 
           <Animated.Image
             source={require('../assets/Logo.png')}
             style={[styles.logo, { transform: [{ scale: logoScale }] }]}
@@ -385,7 +409,9 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.recentlyListenedContainer}>
           <Text style={styles.sectionTitle}>Recently Listened</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {recentlyListenedData.map((song, index) => (
+            {isFetchingHome && recentlyListenedData.length === 0 ? Array.from({ length: 4 }).map((_, index) => (
+              <SkeletonCard key={index} style={[styles.songCard, { width: screenWidth / 3 }]} imageStyle={styles.songImage} />
+            )) : recentlyListenedData.map((song, index) => (
               <TouchableOpacity
                 key={index}
                 style={[styles.songCard, { width: screenWidth / 3 }]}
@@ -416,9 +442,6 @@ export default function HomeScreen({ navigation }) {
         {renderHorizontalSection('More Releases', moreAlbumsData, renderAlbumCard, 'Haz pull-to-refresh para intentar cargar más álbumes.')}
         {renderHorizontalSection('More Artists', moreArtistsData, renderArtistCard, 'Haz pull-to-refresh para intentar cargar más artistas.')}
       </Animated.ScrollView>
-
-      {/* Barra de menú inferior */}
-      <MenuBar />
     </SafeAreaView>
   );
 }
@@ -429,16 +452,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#171515'
   },
   contentContainer: {
-    paddingTop: 5,
+    paddingTop: 0,
     paddingBottom: 120,
   },
   stickyHeader: {
-    height: 50,
-    backgroundColor: 'rgba(23, 21, 21, 0.96)',
+    height: 104,
+    paddingTop: 42,
+    backgroundColor: '#171515',
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    overflow: 'hidden',
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
   logo: {
     width: 50,

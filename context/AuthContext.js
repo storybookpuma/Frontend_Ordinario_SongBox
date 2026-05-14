@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import * as ExpoLinking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
@@ -17,8 +17,24 @@ export const AuthProvider = ({ children }) => {
   const [authToken, setAuthToken] = useState(null);
   const [isLoading, setIsLoading] = useState(true); 
   const [authCompleted, setAuthCompleted] = useState(false); 
+  const unauthorizedAlertShown = useRef(false);
 
-  const axiosInstance = useMemo(() => createApiClient(authToken), [authToken]);
+  const handleUnauthorized = useCallback(async () => {
+    setUser(null);
+    setAuthToken(null);
+    setAuthCompleted(false);
+    await SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY);
+
+    if (!unauthorizedAlertShown.current) {
+      unauthorizedAlertShown.current = true;
+      Alert.alert('Sesión expirada', 'Vuelve a iniciar sesión para continuar.');
+    }
+  }, []);
+
+  const axiosInstance = useMemo(
+    () => createApiClient(authToken, { onUnauthorized: handleUnauthorized }),
+    [authToken, handleUnauthorized]
+  );
 
   // Función para cerrar sesión
   const logout = useCallback(async () => {
@@ -26,6 +42,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setAuthToken(null);
       setAuthCompleted(false);
+      unauthorizedAlertShown.current = false;
       await SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY);
     } catch (error) {
       console.error('Error en logout:', error);
@@ -42,6 +59,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     await SecureStore.setItemAsync(TOKEN_STORAGE_KEY, token);
+    unauthorizedAlertShown.current = false;
     setAuthToken(token);
 
     try {

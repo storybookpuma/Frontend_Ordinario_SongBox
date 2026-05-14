@@ -16,12 +16,12 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useNavigation } from '@react-navigation/native';
-import LoadingScreen from '../components/LoadingScreen';
 import CommentSection from '../components/CommentSection';
 import FavoriteButton from '../components/FavoriteButton';
 import StarRating from '../components/StarRating';
 import { AuthContext } from '../context/AuthContext';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view'; 
+import { DetailSkeleton } from '../components/Skeleton';
 
 export default function SongDetailsScreen({ route }) {
   const navigation = useNavigation();
@@ -223,7 +223,7 @@ export default function SongDetailsScreen({ route }) {
   };
 
   if (!songData) {
-    return <LoadingScreen />;
+    return <DetailSkeleton />;
   }
 
   return (

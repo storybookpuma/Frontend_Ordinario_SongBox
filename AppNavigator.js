@@ -1,5 +1,6 @@
 import React, { useContext } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 import WelcomeScreen from './screens/WelcomeScreen';
 import Welcome2 from './screens/Welcome2';
@@ -13,8 +14,10 @@ import ProfileScreen from './screens/ProfileScreen';
 import SongDetailsScreen from './screens/SongDetailsScreen';
 import { AuthContext } from './context/AuthContext';
 import UserDetailsScreen from './screens/UserDetailsScreen';
+import MenuBar from './components/MenuBar';
 
 const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
 
 const mainScreenOptions = {
   animation: 'none',
@@ -23,6 +26,20 @@ const mainScreenOptions = {
 const detailScreenOptions = {
   animation: 'slide_from_right',
 };
+
+const MainTabs = () => (
+  <Tab.Navigator
+    tabBar={(props) => <MenuBar tabBarProps={props} />}
+    screenOptions={{
+      headerShown: false,
+      lazy: false,
+    }}
+  >
+    <Tab.Screen name="HomeScreen" component={HomeScreen} />
+    <Tab.Screen name="SearchScreen" component={SearchScreen} />
+    <Tab.Screen name="ProfileScreen" component={ProfileScreen} />
+  </Tab.Navigator>
+);
 
 export default function AppNavigator() {
   const { user } = useContext(AuthContext);
@@ -35,9 +52,7 @@ export default function AppNavigator() {
     >
       {user ? (
         <>
-          <Stack.Screen name="HomeScreen" component={HomeScreen} options={mainScreenOptions} />
-          <Stack.Screen name="SearchScreen" component={SearchScreen} options={mainScreenOptions} />
-          <Stack.Screen name="ProfileScreen" component={ProfileScreen} options={mainScreenOptions} />
+          <Stack.Screen name="MainTabs" component={MainTabs} options={mainScreenOptions} />
           <Stack.Screen name="AlbumDetailsScreen" component={AlbumDetailsScreen} options={detailScreenOptions} />
           <Stack.Screen name="ArtistDetailsScreen" component={ArtistDetailsScreen} options={detailScreenOptions} />
           <Stack.Screen name="SongDetailsScreen" component={SongDetailsScreen} options={detailScreenOptions} />

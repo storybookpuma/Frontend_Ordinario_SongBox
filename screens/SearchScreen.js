@@ -6,15 +6,17 @@ import {
   Image, 
   StyleSheet, 
   FlatList,
-  ActivityIndicator,
+  Animated,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
 import SearchBar from '../components/SearchBar';
-import MenuBar from '../components/MenuBar';
+import { SkeletonCard } from '../components/Skeleton';
 
 export default function SearchScreen({ navigation }) {
   const { axiosInstance, isLoading: authLoading } = useContext(AuthContext);
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Albums');
@@ -23,6 +25,20 @@ export default function SearchScreen({ navigation }) {
   const [error, setError] = useState(null);
 
   const debounceTimeout = useRef(null);
+  const resultsAnim = useRef(new Animated.Value(0)).current;
+  const hasResults = searchResults.length > 0;
+  const collageGap = 12;
+  const collageItemWidth = (screenWidth - 40 - collageGap) / 2;
+
+  useEffect(() => {
+    Animated.spring(resultsAnim, {
+      toValue: hasResults ? 1 : 0,
+      useNativeDriver: true,
+      stiffness: 130,
+      damping: 18,
+      mass: 0.9,
+    }).start();
+  }, [hasResults, resultsAnim]);
 
   const handleSearchChange = (text) => {
     setSearchQuery(text);
@@ -143,17 +159,87 @@ export default function SearchScreen({ navigation }) {
     }
   };
 
+  const getResultImage = (item) => (
+    item.cover_image || item.image || item.profile_picture
+      ? { uri: item.cover_image || item.image || item.profile_picture }
+      : require('../assets/default_picture.png')
+  );
+
+  const getResultSubtitle = (item) => (
+    selectedCategory === 'Albums' && item.artist
+      ? Array.isArray(item.artist)
+        ? item.artist.join(', ')
+        : item.artist
+      : selectedCategory === 'Songs' && item.artists
+      ? item.artists.join(', ')
+      : selectedCategory === 'Artists' && item.genres
+      ? item.genres.join(', ')
+      : selectedCategory === 'Profiles' && item.email
+      ? item.email
+      : null
+  );
+
+  const renderResultItem = ({ item, index }) => {
+    return (
+      <TouchableOpacity
+        style={[
+          styles.collageItem,
+          {
+            width: collageItemWidth,
+            height: collageItemWidth,
+          },
+        ]}
+        onPress={() => handleResultPress(item)}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${item.name || item.username || item.title || 'result'}`}
+      >
+        <Image source={getResultImage(item)} style={styles.collageImage} />
+        <View style={styles.collageOverlay}>
+          <Text style={styles.collageTitle} numberOfLines={2}>
+            {item.name || item.username || item.title}
+          </Text>
+          {getResultSubtitle(item) ? (
+            <Text style={styles.collageSubtitle} numberOfLines={1}>{getResultSubtitle(item)}</Text>
+          ) : null}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderSearchSkeleton = (_, index) => (
+    <SkeletonCard
+      key={index}
+      style={[styles.collageItem, { width: collageItemWidth, height: collageItemWidth }]}
+      imageStyle={styles.skeletonCollageImage}
+    />
+  );
+
   if (authLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#A071CA" />
+        <SkeletonCard style={{ width: 180 }} />
       </View>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.searchSection}>
+      <Animated.View
+        style={[
+          styles.searchSection,
+          !hasResults && styles.searchSectionCentered,
+          {
+            transform: [
+              {
+                translateY: resultsAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [screenHeight * 0.12, -28],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
         <View style={styles.logoAndSearchContainer}>
           <View style={styles.logoContainer}>
             <Image 
@@ -196,11 +282,11 @@ export default function SearchScreen({ navigation }) {
             )}
           />
         </View>
-      </View>
+      </Animated.View>
 
       {isLoading && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#A071CA" />
+        <View style={styles.searchSkeletonGrid}>
+          {Array.from({ length: 6 }).map(renderSearchSkeleton)}
         </View>
       )}
 
@@ -216,49 +302,30 @@ export default function SearchScreen({ navigation }) {
         </View>
       )}
 
-      <FlatList
+      <Animated.FlatList
+        key="search-collage"
         data={searchResults}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.resultItem}
-            onPress={() => handleResultPress(item)}
-          >
-            <Image
-              source={
-                item.cover_image || item.image || item.profile_picture
-                  ? { uri: item.cover_image || item.image || item.profile_picture }
-                  : require('../assets/default_picture.png')
-              }
-              style={styles.resultImage}
-            />
-            <View style={styles.resultInfo}>
-              <Text style={styles.resultTitle} numberOfLines={1}>
-                {item.name || item.username || item.title}
-              </Text>
-              <Text style={styles.resultSubtitle} numberOfLines={1}>
-                {selectedCategory === 'Albums' && item.artist
-                  ? Array.isArray(item.artist)
-                    ? item.artist.join(', ')
-                    : item.artist
-                  : selectedCategory === 'Songs' && item.artists
-                  ? item.artists.join(', ')
-                  : selectedCategory === 'Artists' && item.genres
-                  ? item.genres.join(', ')
-                  : selectedCategory === 'Profiles' && item.email
-                  ? item.email
-                  : null}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        )}
+        renderItem={renderResultItem}
         keyExtractor={(item, index) => item.id || index.toString()}
-        contentContainerStyle={styles.searchResultsContainer}
+        numColumns={2}
+        columnWrapperStyle={styles.collageRow}
+        contentContainerStyle={[
+          styles.searchResultsContainer,
+          { opacity: hasResults ? 1 : 0 },
+        ]}
         showsVerticalScrollIndicator={false}
+        style={{
+          opacity: resultsAnim,
+          transform: [
+            {
+              translateY: resultsAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [28, 0],
+              }),
+            },
+          ],
+        }}
       />
-
-      <View style={styles.menuContainer}>
-        <MenuBar activeTab="SearchScreen" />
-      </View>
     </SafeAreaView>
   );
 }
@@ -272,7 +339,12 @@ const styles = StyleSheet.create({
   searchSection: {
     paddingHorizontal: 0,
     paddingTop: 20,
-    paddingBottom: 10,
+    paddingBottom: 0,
+  },
+  searchSectionCentered: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingBottom: 0,
   },
   logoAndSearchContainer: {
     flexDirection: 'column',
@@ -288,7 +360,8 @@ const styles = StyleSheet.create({
     height: 80,
   },
   searchContainer: {
-    width: '100%',
+    width: '88%',
+    maxWidth: 420,
   },
   categoriesWrapper: {
     width: '100%',
@@ -296,8 +369,9 @@ const styles = StyleSheet.create({
   },
   categoriesRow: {
     paddingVertical: 5,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     alignItems: 'center',
+    width: '100%',
   },
   categoryItem: {
     paddingHorizontal: 15,
@@ -327,6 +401,13 @@ const styles = StyleSheet.create({
     marginTop: 20,
     alignItems: 'center',
   },
+  searchSkeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
   errorContainer: {
     marginTop: 20,
     alignItems: 'center',
@@ -347,24 +428,49 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   searchResultsContainer: {
-    paddingBottom: 80,
-    paddingHorizontal: 0,
+    paddingBottom: 130,
+    paddingHorizontal: 20,
+    paddingTop: 4,
     flexGrow: 1,
   },
-  resultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#2A2A2A',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
-    width: '100%',
+  collageRow: {
+    gap: 12,
+    marginBottom: 12,
   },
-  resultImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 10,
-    marginRight: 15,
+  collageItem: {
+    borderRadius: 28,
+    overflow: 'hidden',
+    backgroundColor: '#2A2A2A',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  collageImage: {
+    width: '100%',
+    height: '100%',
+  },
+  skeletonCollageImage: {
+    flex: 1,
+    height: undefined,
+  },
+  collageOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    padding: 12,
+    paddingTop: 34,
+    backgroundColor: 'rgba(0,0,0,0.42)',
+  },
+  collageTitle: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
+  collageSubtitle: {
+    color: 'rgba(255,255,255,0.74)',
+    fontSize: 12,
+    marginTop: 4,
   },
   resultInfo: {
     flex: 1,
@@ -378,12 +484,5 @@ const styles = StyleSheet.create({
     color: '#A0A0A0',
     fontSize: 14,
     marginTop: 5,
-  },
-  menuContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 999,  
   },
 });

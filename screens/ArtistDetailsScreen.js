@@ -18,11 +18,11 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useNavigation } from '@react-navigation/native';
-import LoadingScreen from '../components/LoadingScreen';
 import { AuthContext } from '../context/AuthContext';
 import CommentSection from '../components/CommentSection';
 import FavoriteButton from '../components/FavoriteButton';
 import StarRating from '../components/StarRating'; 
+import { DetailSkeleton } from '../components/Skeleton';
 
 const ArtistDetailsScreen = ({ route }) => {
   const navigation = useNavigation();
@@ -240,7 +240,7 @@ const ArtistDetailsScreen = ({ route }) => {
   };
 
   if (!artistData) {
-    return <LoadingScreen />;
+    return <DetailSkeleton />;
   }
 
   return (
