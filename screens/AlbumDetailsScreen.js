@@ -1,26 +1,23 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
   Animated,
-  ActivityIndicator,
-  Alert,
-  TouchableWithoutFeedback,
-  Keyboard,
   TextInput,
-  useWindowDimensions,
+  Keyboard,
 } from 'react-native';
 import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useNavigation } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import CommentSection from '../components/CommentSection';
 import FavoriteButton from '../components/FavoriteButton';
 import StarRating from '../components/StarRating';
 import { AuthContext } from '../context/AuthContext';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { DetailSkeleton } from '../components/Skeleton';
 import { queryKeys } from '../api/queryKeys';
 import { useToast } from '../context/ToastContext';
@@ -28,10 +25,12 @@ import { useFavorites } from '../hooks/useFavorites';
 import { useRating } from '../hooks/useRating';
 import { getApiErrorMessage } from '../utils/errors';
 
+const HEADER_MAX = 320;
+const HEADER_MIN = 120;
+
 const AlbumDetailsScreen = ({ route }) => {
   const navigation = useNavigation();
   const { showToast } = useToast();
-  const { height: screenHeight } = useWindowDimensions();
   const scrollY = useRef(new Animated.Value(0)).current;
   const { axiosInstance, user } = useContext(AuthContext);
 
@@ -46,14 +45,10 @@ const AlbumDetailsScreen = ({ route }) => {
 
   const [albumData, setAlbumData] = useState(null);
   const [comments, setComments] = useState([]);
-  const [loadingAlbumImage, setLoadingAlbumImage] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
-
-  // Estados para calificaciones
   const [userRating, setUserRating] = useState(0);
   const [averageRating, setAverageRating] = useState(0);
   const [ratingCount, setRatingCount] = useState(0);
-
   const [newComment, setNewComment] = useState('');
 
   const { favorites, invalidateFavorites } = useFavorites();
@@ -77,11 +72,16 @@ const AlbumDetailsScreen = ({ route }) => {
     },
   });
 
-  const imageScale = scrollY.interpolate({
-    inputRange: [-100, 0],
-    outputRange: [1.5, 1],
-    extrapolateLeft: 'extend',
-    extrapolateRight: 'clamp'
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, HEADER_MAX - HEADER_MIN],
+    outputRange: [HEADER_MAX, HEADER_MIN],
+    extrapolate: 'clamp',
+  });
+
+  const imageOpacity = scrollY.interpolate({
+    inputRange: [0, (HEADER_MAX - HEADER_MIN) * 0.6],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
   });
 
   useEffect(() => {
@@ -98,8 +98,8 @@ const AlbumDetailsScreen = ({ route }) => {
   }, [albumDetailsQuery.error, albumDetailsQuery.isError, showToast]);
 
   useEffect(() => {
-    setIsFavorite(favorites.some((fav) => fav.entityId === album.id && fav.entityType === 'album'));
-  }, [album.id, favorites]);
+    setIsFavorite(favorites.some((fav) => fav.entityId === album?.id && fav.entityType === 'album'));
+  }, [album?.id, favorites]);
 
   useEffect(() => {
     if (userRatingQuery.data) setUserRating(userRatingQuery.data);
@@ -108,16 +108,13 @@ const AlbumDetailsScreen = ({ route }) => {
   const handleToggleFavorite = async () => {
     const nextFavorite = !isFavorite;
     setIsFavorite(nextFavorite);
-
     try {
       if (!nextFavorite) {
-        // Eliminar de favoritos
         await axiosInstance.post('/remove_favorite', {
           entityType: 'album',
           entityId: album.id,
         });
       } else {
-        // Agregar a favoritos
         await axiosInstance.post('/add_favorite', {
           entityType: 'album',
           entityId: album.id,
@@ -127,9 +124,8 @@ const AlbumDetailsScreen = ({ route }) => {
         });
       }
       invalidateFavorites();
-    } catch (error) {
+    } catch (_error) {
       setIsFavorite(!nextFavorite);
-      console.error('Error al actualizar favorito:', error);
       showToast('No se pudieron actualizar los favoritos.');
     }
   };
@@ -141,11 +137,7 @@ const AlbumDetailsScreen = ({ route }) => {
   };
 
   const handleRatingChange = async (rating) => {
-    if (!user) {
-      Alert.alert('Autenticación requerida', 'Debes iniciar sesión para calificar.');
-      return;
-    }
-
+    if (!user) return;
     if (rating === 0 && userRating > 0) {
       try {
         await userRatingQuery.deleteRating({
@@ -161,9 +153,7 @@ const AlbumDetailsScreen = ({ route }) => {
       }
       return;
     }
-
     if (rating === 0) return;
-
     const previousRating = userRating;
     try {
       await userRatingQuery.rateEntity({
@@ -181,13 +171,11 @@ const AlbumDetailsScreen = ({ route }) => {
     }
   };
 
-  // Función para publicar un nuevo comentario
   const handlePostComment = async () => {
     if (newComment.trim().length === 0) {
-      showToast("El comentario no puede estar vacío.");
+      showToast('El comentario no puede estar vacío.');
       return;
     }
-
     try {
       const response = await axiosInstance.post(`/album/${album.id}/comments`, {
         comment_text: newComment,
@@ -195,12 +183,12 @@ const AlbumDetailsScreen = ({ route }) => {
         image: albumData?.cover_image,
         artist: albumData?.artists?.join(', '),
       });
-
       const updatedComments = sortComments([response.data.comment, ...comments]);
       setComments(updatedComments);
       setNewComment('');
+      Keyboard.dismiss();
     } catch (_error) {
-      showToast("No se pudo agregar el comentario. Verifica la conexión.");
+      showToast('No se pudo agregar el comentario. Verifica la conexión.');
     }
   };
 
@@ -213,316 +201,319 @@ const AlbumDetailsScreen = ({ route }) => {
   }
 
   return (
-    <KeyboardAwareScrollView
-      style={styles.keyboardAwareContainer}
-      contentContainerStyle={styles.scrollContainer}
-      enableOnAndroid={true}
-      extraScrollHeight={20}
-      keyboardShouldPersistTaps='handled'
-    >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={styles.innerContainer}>
-          {/* Fondo difuminado con la imagen del álbum */}
-          <View style={styles.backgroundGlow}>
-            {loadingAlbumImage && (
-              <ActivityIndicator size="large" color="#A071CA" style={styles.albumImageLoader} />
-            )}
-            <Image 
-              source={{ uri: albumData.cover_image || 'https://via.placeholder.com/500' }}  
-              style={styles.blurredBackground}
-              blurRadius={50}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              transition={220}
-              placeholder={require('../assets/default_picture.png')}
-              onLoadStart={() => setLoadingAlbumImage(true)}
-              onLoadEnd={() => setLoadingAlbumImage(false)}
-            />
-          </View>
-
-          {/* Botón de cierre */}
-          <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
-            <Icon name="times" size={30} color="#FFF" />
+    <SafeAreaView edges={['bottom']} style={styles.container}>
+      <Animated.ScrollView
+        contentContainerStyle={styles.scrollContent}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Hero */}
+        <Animated.View style={[styles.hero, { height: headerHeight }]}>
+          <Image
+            source={{ uri: albumData.cover_image }}
+            style={styles.heroImage}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={200}
+          />
+          <LinearGradient
+            colors={['transparent', 'rgba(23,21,21,0.6)', '#171515']}
+            locations={[0, 0.5, 1]}
+            style={styles.heroGradient}
+          />
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Icon name="chevron-left" size={22} color="#FFF" />
           </TouchableOpacity>
+          <Animated.Image
+            source={{ uri: albumData.cover_image }}
+            style={[styles.heroCover, { opacity: imageOpacity }]}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={200}
+          />
+        </Animated.View>
 
-          {/* Imagen del álbum con efecto de escala */}
-          <Animated.View style={[
-            styles.albumImageContainer,
-            { height: screenHeight * 0.5, transform: [{ scale: imageScale }] }
-          ]}>
-            {loadingAlbumImage && (
-              <ActivityIndicator size="large" color="#A071CA" style={styles.albumImageLoader} />
-            )}
-            <Image 
-              source={{ uri: albumData.cover_image || 'https://via.placeholder.com/500' }}  
-              style={styles.albumImage}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              transition={220}
-              placeholder={require('../assets/default_picture.png')}
-              onLoadStart={() => setLoadingAlbumImage(true)}
-              onLoadEnd={() => setLoadingAlbumImage(false)}
-            />
-          </Animated.View>
-
-          <View style={styles.contentContainer}>
-            {/* Detalles del álbum */}
-            <View style={styles.headerContainer}>
-              <Text style={styles.albumName}>{albumData.name}</Text>
-              <FavoriteButton isFavorite={isFavorite} onToggleFavorite={handleToggleFavorite} />
-            </View>
-            <TouchableOpacity
-              onPress={() => {
-                if (albumData.artist_ids && albumData.artist_ids.length > 0) {
-                  navigation.navigate('ArtistDetailsScreen', {
-                    artistId: albumData.artist_ids[0],
-                    artistName: albumData.artists[0],
-                  });
-                } else {
-                  console.warn('No se encontró artist_ids en albumData');
-                  Alert.alert('Error', 'No se pudo obtener la información del artista.');
-                }
-              }}
-            >
-              <Text style={styles.albumArtists}>by {albumData.artists.join(', ')}</Text>
-            </TouchableOpacity>
-            <Text style={styles.albumReleaseDate}>Released on {albumData.release_date}</Text>
-
-            {/* Sección de calificaciones */}
-            <View style={styles.ratingSection}>
-              <Text style={styles.sectionTitle}>
-                {userRating > 0 ? 'Tu calificación' : 'Califica este álbum'}
-              </Text>
-              <StarRating
-                maxStars={10}
-                currentRating={userRating}
-                onRatingChange={handleRatingChange}
-                editable={Boolean(user)}
-                isLoading={userRatingQuery.isMutating}
-              />
-              {userRating > 0 && (
-                <TouchableOpacity onPress={() => handleRatingChange(0)} disabled={userRatingQuery.isMutating}>
-                  <Text style={styles.deleteRatingText}>Eliminar calificación</Text>
-                </TouchableOpacity>
-              )}
-              <Text style={styles.averageRatingText}>
-                Promedio de calificaciones: {averageRating.toFixed(1)} ({ratingCount} {ratingCount === 1 ? 'calificación' : 'calificaciones'})
-              </Text>
-            </View>
-
-            {/* Lista de canciones */}
-            <Text style={styles.tracksTitle}>Tracks</Text>
-            <View style={styles.tracksContainer}>
-              {albumData.tracks.map((track) => (
-                <TouchableOpacity 
-                  key={track.id} 
-                  style={styles.trackItem}
-                  onPress={() => {
-                    navigation.navigate('SongDetailsScreen', { songId: track.id });
-                  }}
-                >
-                  <Text style={styles.trackName}>{track.track_number}. {track.name}</Text>
-                  <Text style={styles.trackDuration}>{formatDuration(track.duration_ms)}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Sección de comentarios */}
-            <CommentSection
-              entityType="album"
-              entityId={albumData.id}
-              comments={comments}
-              onAddComment={setComments}
-              navigation={navigation}
-            />
-
-            {/* Campo de entrada para comentarios */}
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.input}
-                placeholder="Escribe un comentario..."
-                placeholderTextColor="#888"
-                value={newComment}
-                onChangeText={setNewComment}
-                multiline={true}
-                numberOfLines={3}
-              />
-              <TouchableOpacity style={styles.postButton} onPress={handlePostComment}>
-                <Text style={styles.postButtonText}>Publicar</Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            <View style={styles.headerText}>
+              <Text style={styles.title} numberOfLines={2}>{albumData.name}</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  if (albumData.artist_ids?.length > 0) {
+                    navigation.navigate('ArtistDetailsScreen', {
+                      artistId: albumData.artist_ids[0],
+                      artistName: albumData.artists[0],
+                    });
+                  }
+                }}
+              >
+                <Text style={styles.subtitle}>{albumData.artists.join(', ')}</Text>
               </TouchableOpacity>
+              <Text style={styles.meta}>{albumData.release_date} · {albumData.total_tracks} tracks</Text>
             </View>
+            <FavoriteButton isFavorite={isFavorite} onToggleFavorite={handleToggleFavorite} />
           </View>
         </View>
-      </TouchableWithoutFeedback>
-    </KeyboardAwareScrollView>
+
+        {/* Rating Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{userRating > 0 ? 'Your Rating' : 'Rate this Album'}</Text>
+          <StarRating
+            maxStars={10}
+            currentRating={userRating}
+            onRatingChange={handleRatingChange}
+            editable={Boolean(user)}
+            isLoading={userRatingQuery.isMutating}
+          />
+          <View style={styles.ratingMeta}>
+            <Text style={styles.ratingScore}>{averageRating.toFixed(1)}</Text>
+            <Text style={styles.ratingCount}> ({ratingCount})</Text>
+          </View>
+          {userRating > 0 && (
+            <TouchableOpacity onPress={() => handleRatingChange(0)} disabled={userRatingQuery.isMutating}>
+              <Text style={styles.deleteRating}>Eliminar calificación</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Tracks */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Tracks</Text>
+          <View style={styles.tracksList}>
+            {albumData.tracks.map((track, index) => (
+              <TouchableOpacity
+                key={track.id}
+                style={[
+                  styles.trackRow,
+                  index !== albumData.tracks.length - 1 && styles.trackRowBorder,
+                ]}
+                onPress={() => navigation.navigate('SongDetailsScreen', { songId: track.id })}
+              >
+                <Text style={styles.trackNumber}>{track.track_number}</Text>
+                <View style={styles.trackInfo}>
+                  <Text style={styles.trackName} numberOfLines={1}>{track.name}</Text>
+                  <Text style={styles.trackArtists} numberOfLines={1}>
+                    {track.artists?.join(', ') || albumData.artists.join(', ')}
+                  </Text>
+                </View>
+                <Text style={styles.trackDuration}>{formatDuration(track.duration_ms)}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Comments */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Comments</Text>
+          <CommentSection
+            entityType="album"
+            entityId={albumData.id}
+            comments={comments}
+            onAddComment={setComments}
+            navigation={navigation}
+          />
+        </View>
+
+        {/* Comment Input */}
+        <View style={styles.inputCard}>
+          <TextInput
+            style={styles.input}
+            placeholder="Write a comment..."
+            placeholderTextColor="#888"
+            value={newComment}
+            onChangeText={setNewComment}
+            multiline
+            numberOfLines={2}
+          />
+          <TouchableOpacity style={styles.postButton} onPress={handlePostComment}>
+            <Icon name="paper-plane" size={16} color="#FFF" />
+          </TouchableOpacity>
+        </View>
+      </Animated.ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  keyboardAwareContainer: {
+  container: {
     flex: 1,
     backgroundColor: '#171515',
   },
-  scrollContainer: {
-    flexGrow: 1,
-    paddingHorizontal: 0, 
-    paddingVertical: 10,  
+  scrollContent: {
+    paddingBottom: 24,
   },
-  innerContainer: {
-    flex: 1,
-  },
-  backgroundGlow: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+
+  hero: {
+    position: 'relative',
     overflow: 'hidden',
   },
-  blurredBackground: {
+  heroImage: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.35,
+  },
+  heroGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  heroCover: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    opacity: 0.5,
+    bottom: 20,
+    left: 20,
+    width: 160,
+    height: 160,
+    borderRadius: 20,
+    boxShadow: '0 12px 28px rgba(0,0,0,0.35)',
   },
-  albumImageLoader: { 
+  backButton: {
     position: 'absolute',
-    top: '50%',
-    left: '50%',
-    marginTop: -25,
-    marginLeft: -25,
-    zIndex: 2,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 40,
-    right: 20,
-    zIndex: 10,
-    padding: 10,
-  },
-  albumImageContainer: { 
-    width: '100%',
-    marginTop: -50,
-  },
-  albumImage: { 
-    width: '100%',
-    height: '100%',
-  },
-  contentContainer: {
-    paddingHorizontal: 0, 
-    paddingTop: 20,        
-    backgroundColor: 'rgba(23, 21, 21, 0.9)',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    marginTop: -30,
-  },
-  headerContainer: {
-    flexDirection: 'row',
+    top: 12,
+    left: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingHorizontal: 10, 
+    gap: 12,
   },
-  albumName: {
-    fontSize: 28,
-    color: '#FFF',
-    fontWeight: 'bold',
-    marginBottom: 5,
+  headerText: {
     flex: 1,
-    flexWrap: 'wrap',
   },
-  albumArtists: {
-    fontSize: 18,
-    color: '#A071CA',
-    marginBottom: 5,
-  },
-  albumReleaseDate: {
-    fontSize: 16,
+  title: {
+    fontSize: 26,
     color: '#FFF',
-    opacity: 0.8,
-    marginBottom: 20,
+    fontWeight: '800',
+    lineHeight: 30,
   },
-  ratingSection: {
-    marginBottom: 20,
-    paddingHorizontal: 10, 
-  },
-  sectionTitle: {
-    color: '#fff',
-    fontSize: 20,
-    marginBottom: 10,
-    fontWeight: 'bold',
-  },
-  averageRatingText: {
-    color: '#fff',
+  subtitle: {
     fontSize: 16,
+    color: '#BBA7FF',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  meta: {
+    fontSize: 13,
+    color: '#888',
+    marginTop: 4,
+  },
+
+  card: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255,255,255,0.055)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  cardTitle: {
+    fontSize: 18,
+    color: '#FFF',
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  ratingMeta: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
     marginTop: 10,
   },
-  deleteRatingText: {
-    color: '#E74C3C',
+  ratingScore: {
+    fontSize: 22,
+    color: '#FFD700',
+    fontWeight: 'bold',
+  },
+  ratingCount: {
     fontSize: 14,
-    marginTop: 8,
+    color: '#888',
+  },
+  deleteRating: {
+    color: '#E74C3C',
+    fontSize: 13,
+    marginTop: 10,
     textAlign: 'center',
   },
-  tracksTitle: {
-    fontSize: 22,
-    color: '#FFF',
-    fontWeight: 'bold',
-    marginBottom: 10,
+
+  tracksList: {
+    gap: 0,
   },
-  tracksContainer: {
-    marginBottom: 20,
-  },
-  trackItem: {
+  trackRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 5,
-    borderBottomColor: '#555',
-    borderBottomWidth: 0.5,
-    width: '100%', 
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 12,
+  },
+  trackRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  trackNumber: {
+    width: 28,
+    fontSize: 14,
+    color: '#888',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  trackInfo: {
+    flex: 1,
   },
   trackName: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#FFF',
-    flex: 1,
-    flexWrap: 'wrap',
-    marginRight: 10,
+    fontWeight: '600',
+  },
+  trackArtists: {
+    fontSize: 12,
+    color: '#A071CA',
+    marginTop: 2,
   },
   trackDuration: {
-    fontSize: 14,
-    color: '#FFF',
-    opacity: 0.6,
+    fontSize: 13,
+    color: '#888',
   },
-  inputContainer: {
+
+  inputCard: {
+    marginHorizontal: 16,
+    marginTop: 16,
     flexDirection: 'row',
-    alignItems: 'flex-end', 
-    borderTopWidth: 1,
-    borderColor: '#444',
-    paddingTop: 10,          
-    marginTop: 15,           
-    paddingHorizontal: 10,  
-    width: '100%',          
+    alignItems: 'flex-end',
+    gap: 10,
+    padding: 12,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.055)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   input: {
     flex: 1,
-    backgroundColor: '#2c2c2c',
-    color: '#fff',
-    padding: 10,
-    borderRadius: 10,
-    marginRight: 10,
-    textAlignVertical: 'top', 
-    maxHeight: 100, 
+    color: '#FFF',
+    fontSize: 15,
+    paddingVertical: 8,
+    maxHeight: 80,
+    textAlignVertical: 'top',
   },
   postButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#A071CA',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 10,
-    alignSelf: 'flex-end', 
-  },
-  postButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
