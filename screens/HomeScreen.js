@@ -91,6 +91,8 @@ export default function HomeScreen({ navigation }) {
   const indicatorAnim = useRef(new Animated.Value(0)).current;
   const headerScrollY = useRef(new Animated.Value(0)).current;
   const [recentlyListenedData, setRecentlyListenedData] = useState([]);
+  const carouselIndexRef = useRef(0);
+  const isUserInteractingCarousel = useRef(false);
 
   const chartsQuery = useCharts({ entityType: 'song', limit: 10 });
   const activityQuery = useActivity({ limit: 10 });
@@ -262,6 +264,27 @@ export default function HomeScreen({ navigation }) {
     }))
     : DATA;
 
+  const featuredCarouselCount = featuredCarouselData.length;
+  const featuredCardWidth = screenWidth - 52;
+  const featuredCardSpacing = 12;
+  const featuredSnapInterval = featuredCardWidth + featuredCardSpacing;
+  const featuredCarouselPadding = (screenWidth - featuredCardWidth) / 2;
+  const recentlyListenedCardWidth = screenWidth * 0.5;
+
+  // Auto-advance featured carousel every 5s
+  useEffect(() => {
+    const totalItems = featuredCarouselCount || 1;
+    const interval = setInterval(() => {
+      if (isUserInteractingCarousel.current) return;
+      const next = (carouselIndexRef.current + 1) % totalItems;
+      carouselIndexRef.current = next;
+        const offset = next * featuredSnapInterval;
+        carouselRef.current?.scrollTo({ x: offset, animated: true });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [featuredCarouselCount, featuredSnapInterval]);
+
   const logoScale = headerScrollY.interpolate({
     inputRange: [0, 90],
     outputRange: [1, 0.42],
@@ -277,10 +300,10 @@ export default function HomeScreen({ navigation }) {
   const renderAlbumCard = (item, index) => (
     <TouchableOpacity
       key={`${item.id || item.title}-${index}`}
-      style={styles.largeContentCard}
+      style={[styles.largeContentCard, index % 3 === 0 && styles.largeContentCardWide]}
       onPress={() => item.id && navigation.navigate('AlbumDetailsScreen', { album: item })}
     >
-      <Image source={item.imageSource} style={styles.largeContentImage} />
+      <Image source={item.imageSource} style={[styles.largeContentImage, index % 3 === 0 && styles.largeContentImageWide]} />
       <Text style={styles.largeContentTitle} numberOfLines={2}>{item.title}</Text>
       <Text style={styles.largeContentSubtitle} numberOfLines={1}>{item.artist}</Text>
       {item.release_date ? <Text style={styles.contentMeta}>{item.release_date}</Text> : null}
@@ -290,16 +313,16 @@ export default function HomeScreen({ navigation }) {
   const renderArtistCard = (item, index) => (
     <TouchableOpacity
       key={`${item.id || item.name}-${index}`}
-      style={styles.largeContentCard}
+      style={[styles.artistCircleCard, index % 2 === 1 && styles.artistCircleCardSmall]}
       onPress={() => item.id && navigation.navigate('ArtistDetailsScreen', {
         artistId: item.id,
         artistName: item.name,
         artist: item,
       })}
     >
-      <Image source={item.imageSource} style={styles.largeContentImage} />
-      <Text style={styles.largeContentTitle} numberOfLines={2}>{item.name}</Text>
-      <Text style={styles.largeContentSubtitle} numberOfLines={1}>{item.genres || 'Featured artist'}</Text>
+      <Image source={item.imageSource} style={[styles.artistCircleImage, index % 2 === 1 && styles.artistCircleImageSmall]} />
+      <Text style={styles.artistCircleName} numberOfLines={2}>{item.name}</Text>
+      {item.genres ? <Text style={styles.artistCircleMeta} numberOfLines={1}>{item.genres}</Text> : null}
       {item.popularity ? <Text style={styles.contentMeta}>{item.popularity}% popularity</Text> : null}
     </TouchableOpacity>
   );
@@ -333,7 +356,7 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <SafeAreaView edges={['bottom']} style={styles.container}>
-      <Animated.ScrollView 
+      <Animated.ScrollView
         contentContainerStyle={styles.contentContainer}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: headerScrollY } } }],
@@ -371,16 +394,22 @@ export default function HomeScreen({ navigation }) {
         {/* Carrusel de arriba (Datos Estáticos) */}
         <ScrollView
           horizontal
-          pagingEnabled
           ref={carouselRef}
           showsHorizontalScrollIndicator={false}
           snapToAlignment="center"
           decelerationRate="fast"
-          snapToInterval={screenWidth - 60}
-          contentContainerStyle={styles.carouselContainer}
+          snapToInterval={featuredSnapInterval}
+          contentContainerStyle={[styles.carouselContainer, { paddingHorizontal: featuredCarouselPadding }]}
+          onScrollBeginDrag={() => { isUserInteractingCarousel.current = true; }}
+          onScrollEndDrag={() => { isUserInteractingCarousel.current = false; }}
+          onMomentumScrollEnd={(e) => {
+            isUserInteractingCarousel.current = false;
+            const page = Math.round(e.nativeEvent.contentOffset.x / featuredSnapInterval);
+            carouselIndexRef.current = page;
+          }}
         >
           {featuredCarouselData.map((item, index) => (
-            <View key={index} style={[styles.albumSection, { width: screenWidth - 60 }]}> 
+            <View key={index} style={[styles.albumSection, { width: featuredCardWidth, marginRight: index === featuredCarouselData.length - 1 ? 0 : featuredCardSpacing }]}> 
               <View style={styles.albumInfo}>
                 <Text style={styles.albumLabel}>{item.label}</Text>
                 <Text style={styles.albumTitle}>{item.title}</Text>
@@ -451,13 +480,13 @@ export default function HomeScreen({ navigation }) {
         {/* Escuchado Recientemente */}
         <View style={styles.recentlyListenedContainer}>
           <Text style={styles.sectionTitle}>Recently Listened</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentlyListenedScrollContent}>
             {(isFetchingHome || homeFeedQuery.isFetching) && recentlyListenedData.length === 0 ? Array.from({ length: 4 }).map((_, index) => (
-              <SkeletonCard key={index} style={[styles.songCard, { width: screenWidth / 3 }]} imageStyle={styles.songImage} />
+              <SkeletonCard key={index} style={[styles.songCard, { width: recentlyListenedCardWidth }]} imageStyle={styles.songImage} />
             )) : recentlyListenedData.map((song, index) => (
               <TouchableOpacity
                 key={index}
-                style={[styles.songCard, { width: screenWidth / 3 }]}
+                style={[styles.songCard, { width: recentlyListenedCardWidth }]}
                 onPress={() => {
                   if (song.id) {
                     navigation.navigate('SongDetailsScreen', {
@@ -611,8 +640,8 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   stickyHeader: {
-    height: 104,
-    paddingTop: 42,
+    height: 84,
+    paddingTop: 18,
     backgroundColor: '#171515',
     alignItems: 'center',
     justifyContent: 'center',
@@ -624,19 +653,20 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50
   },
+
   carouselContainer: {
     alignItems: 'center'
   },
   albumSection: {
-    height: 130,
+    height: 136,
     backgroundColor: '#A071CA',
-    borderRadius: 20,
-    padding: 15,
+    borderRadius: 26,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     position: 'relative',
     overflow: 'hidden',
-    marginHorizontal: 10,
+    boxShadow: '0 10px 24px rgba(160,113,202,0.24)',
   },
   albumInfo: {
     flex: 1,
@@ -663,14 +693,14 @@ const styles = StyleSheet.create({
   },
   albumImageContainer: {
     position: 'absolute',
-    right: -30,
-    top: -10,
+    right: -24,
+    top: -14,
     overflow: 'hidden',
     zIndex: 2
   },
   albumImage: {
-    width: 190,
-    height: 200,
+    width: 196,
+    height: 208,
     zIndex: 3,
     borderRadius: 10
   },
@@ -735,24 +765,31 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 10
+    marginBottom: 10,
+    paddingHorizontal: 20,
   },
   recentlyListenedContainer: { 
-    marginVertical: 10,
-    paddingLeft: 20,
+    marginVertical: 14,
+  },
+  recentlyListenedScrollContent: {
+    paddingHorizontal: 20,
+    paddingRight: 28,
   },
   songCard: { 
-    marginRight: 20,
-    backgroundColor: '#2A2A2A',
-    borderRadius: 15,
+    marginRight: 16,
+    backgroundColor: 'rgba(255,255,255,0.075)',
+    borderRadius: 24,
     flexDirection: 'column',
     alignItems: 'center', 
-    padding: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    boxShadow: '0 6px 14px rgba(0,0,0,0.16)',
   },
   songImage: { 
     width: '100%', 
-    height: 150, 
-    borderRadius: 10, 
+    height: 176, 
+    borderRadius: 18, 
   },
   songInfoContainerRecentlyListened: {
     width: '100%',
@@ -774,25 +811,82 @@ const styles = StyleSheet.create({
   },
   extraSection: {
     marginTop: 24,
-    paddingLeft: 20,
   },
   extraSectionList: {
-    paddingRight: 20,
+    paddingHorizontal: 20,
   },
   largeContentCard: {
     width: 170,
     marginRight: 16,
     padding: 12,
-    borderRadius: 22,
+    borderRadius: 26,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+  },
+  largeContentCardWide: {
+    width: 196,
+    borderRadius: 30,
+  },
+  largeContentCardCompact: {
+    width: 154,
+    borderRadius: 34,
+  },
+  largeArtistContentCard: {
+    backgroundColor: 'rgba(160,113,202,0.12)',
+  },
+  artistCircleCard: {
+    width: 150,
+    marginRight: 18,
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 32,
+    backgroundColor: 'rgba(160,113,202,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+  },
+  artistCircleCardSmall: {
+    width: 132,
+    marginTop: 10,
+    backgroundColor: 'rgba(255,255,255,0.055)',
+  },
+  artistCircleImage: {
+    width: 116,
+    height: 116,
+    borderRadius: 58,
+    marginBottom: 10,
+  },
+  artistCircleImageSmall: {
+    width: 98,
+    height: 98,
+    borderRadius: 49,
+  },
+  artistCircleName: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  artistCircleMeta: {
+    color: '#D9D0E7',
+    fontSize: 11,
+    marginTop: 4,
+    textAlign: 'center',
   },
   largeContentImage: {
     width: '100%',
-    height: 150,
-    borderRadius: 18,
+    height: 160,
+    borderRadius: 20,
     marginBottom: 10,
+  },
+  largeContentImageWide: {
+    height: 138,
+    borderRadius: 24,
+  },
+  largeArtistContentImage: {
+    borderRadius: 28,
   },
   largeContentTitle: {
     color: '#FFF',
@@ -819,14 +913,15 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
   },
   chartCard: {
-    width: 150,
+    width: 170,
     marginRight: 14,
-    borderRadius: 20,
+    borderRadius: 24,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     padding: 10,
     overflow: 'hidden',
+    boxShadow: '0 3px 10px rgba(0,0,0,0.12)',
   },
   chartImage: {
     width: '100%',
@@ -878,9 +973,11 @@ const styles = StyleSheet.create({
   },
   activityItem: {
     backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 14,
+    borderRadius: 18,
     padding: 12,
     marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#A071CA',
   },
   activityHeader: {
     flexDirection: 'row',
@@ -888,9 +985,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   activityAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(160,113,202,0.2)',
   },
   activityAvatarPlaceholder: {

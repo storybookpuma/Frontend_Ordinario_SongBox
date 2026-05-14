@@ -52,7 +52,7 @@ const MenuBar = ({ scrollY, tabBarProps }) => {
   }, [activeIndexAnim, activeRouteName, thumbPulseAnim]);
 
   // Función para determinar si una pestaña está activa
-  const getIconColor = (tab) => (activeRouteName === tab ? '#FFFFFF' : 'rgba(255,255,255,0.72)');
+  const getIconColor = (tab) => (activeRouteName === tab ? '#BBA7FF' : 'rgba(255,255,255,0.86)');
   const navigateToTab = useCallback((tab) => {
     if (activeRouteName === tab) {
       return;
@@ -176,22 +176,11 @@ const MenuBar = ({ scrollY, tabBarProps }) => {
     ],
   } : null;
 
-  return (
-    <Animated.View style={[styles.menuShell, scrollDrivenStyle]} pointerEvents="box-none" {...panResponder.panHandlers}>
-      <BlurView intensity={Platform.OS === 'ios' ? 55 : 35} tint="dark" style={styles.menuBar}>
-        {canUseLiquidGlass ? (
-          <GlassView
-            pointerEvents="none"
-            glassEffectStyle="clear"
-            colorScheme="dark"
-            isInteractive
-            style={styles.nativeGlassLayer}
-          />
-        ) : null}
+  const menuContent = (
         <LinearGradient
           colors={canUseLiquidGlass
-            ? ['rgba(255,255,255,0.10)', 'rgba(124,58,237,0.06)', 'rgba(8,8,12,0.10)']
-            : ['rgba(236,218,255,0.18)', 'rgba(124,58,237,0.12)', 'rgba(37,20,54,0.34)']}
+            ? ['rgba(255,255,255,0.06)', 'rgba(20,20,22,0.14)', 'rgba(0,0,0,0.08)']
+            : ['rgba(236,218,255,0.16)', 'rgba(124,58,237,0.10)', 'rgba(20,16,24,0.42)']}
           locations={[0, 0.52, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -216,7 +205,7 @@ const MenuBar = ({ scrollY, tabBarProps }) => {
             >
               <Animated.View style={[styles.liquidGlow, { opacity: thumbGlowOpacity }]} />
               <LinearGradient
-                colors={['rgba(255,255,255,0.56)', 'rgba(163,95,255,0.36)', 'rgba(255,255,255,0.12)']}
+                colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.12)', 'rgba(168,85,247,0.10)']}
                 start={{ x: 0.1, y: 0 }}
                 end={{ x: 0.95, y: 1 }}
                 style={styles.liquidThumbGradient}
@@ -262,7 +251,24 @@ const MenuBar = ({ scrollY, tabBarProps }) => {
             </Animated.View>
           </Pressable>
         </LinearGradient>
-      </BlurView>
+  );
+
+  return (
+    <Animated.View style={[styles.menuShell, scrollDrivenStyle]} pointerEvents="box-none" {...panResponder.panHandlers}>
+      {canUseLiquidGlass ? (
+        <GlassView
+          glassEffectStyle="regular"
+          colorScheme="dark"
+          isInteractive
+          style={[styles.menuBar, styles.nativeGlassSurface]}
+        >
+          {menuContent}
+        </GlassView>
+      ) : (
+        <BlurView intensity={Platform.OS === 'ios' ? 72 : 44} tint="dark" style={styles.menuBar}>
+          {menuContent}
+        </BlurView>
+      )}
     </Animated.View>
   );
 };
@@ -270,28 +276,27 @@ const MenuBar = ({ scrollY, tabBarProps }) => {
 const styles = StyleSheet.create({
   menuShell: {
     position: 'absolute',
-    left: 18,
-    right: 18,
-    bottom: Platform.OS === 'ios' ? 12 : 8,
+    left: 46,
+    right: 46,
+    bottom: Platform.OS === 'ios' ? 28 : 18,
     zIndex: 999,
-    borderRadius: 36,
+    borderRadius: 40,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.24,
+    shadowRadius: 22,
     elevation: 10,
   },
   menuBar: {
-    height: 74,
-    borderRadius: 36,
+    height: 72,
+    borderRadius: 40,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(224,197,255,0.18)',
-    backgroundColor: 'rgba(18,14,24,0.28)',
+    borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(16,16,18,0.48)',
   },
-  nativeGlassLayer: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 36,
+  nativeGlassSurface: {
+    backgroundColor: 'transparent',
   },
   glassOverlay: {
     flex: 1,
@@ -304,15 +309,15 @@ const styles = StyleSheet.create({
   liquidThumb: {
     position: 'absolute',
     left: 12,
-    top: 8,
-    bottom: 8,
-    borderRadius: 30,
+    top: 9,
+    bottom: 9,
+    borderRadius: 32,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    shadowColor: '#A071CA',
+    borderColor: 'rgba(255,255,255,0.10)',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.18,
     shadowRadius: 14,
   },
   liquidGlow: {
@@ -322,11 +327,11 @@ const styles = StyleSheet.create({
     top: -12,
     bottom: -12,
     borderRadius: 40,
-    backgroundColor: 'rgba(190,124,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.10)',
   },
   liquidThumbGradient: {
     flex: 1,
-    backgroundColor: 'rgba(168,85,247,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.10)',
   },
   menuItem: {
     alignItems: 'center',
@@ -343,7 +348,7 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   menuText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     marginTop: 4,
   },
