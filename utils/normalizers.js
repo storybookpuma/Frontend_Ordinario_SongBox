@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '../config/env';
+
 export const getUserId = (user) => (user && (user._id || user.id) ? (user._id || user.id).toString() : '');
 
 export const normalizeFavorite = (favorite) => ({
@@ -31,11 +33,18 @@ export const sortComments = (comments = []) => (
   comments.map(normalizeComment).sort((a, b) => b.likes - a.likes)
 );
 
+export const resolveImageUrl = (url) => {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const base = API_BASE_URL.replace(/\/$/, '');
+  return `${base}${url.startsWith('/') ? '' : '/'}${url}`;
+};
+
 export const normalizeUser = (user) => ({
   ...user,
   id: user?.id || user?._id,
   username: user?.username || 'User',
-  profile_picture: user?.profile_picture || null,
+  profile_picture: resolveImageUrl(user?.profile_picture) || null,
   following: Array.isArray(user?.following) ? user.following : [],
 });
 

@@ -20,7 +20,7 @@ import { AuthContext } from '../context/AuthContext';
 import LoadingScreen from '../components/LoadingScreen';
 import { SkeletonCard, SkeletonList } from '../components/Skeleton';
 import { queryKeys } from '../api/queryKeys';
-import { getUserId, normalizeComment, splitFavorites } from '../utils/normalizers';
+import { getUserId, normalizeComment, splitFavorites, resolveImageUrl } from '../utils/normalizers';
 import { useToast } from '../context/ToastContext';
 
 export default function ProfileScreen({ navigation }) {
@@ -40,11 +40,10 @@ export default function ProfileScreen({ navigation }) {
   const entityId = getUserId(user);
   const commentsQueryKey = useMemo(() => queryKeys.comments(entityType, entityId), [entityId]);
   const followingIds = useMemo(() => user?.following || [], [user?.following]);
-  const profileImageSource = useMemo(() => (
-    user?.profile_picture
-      ? { uri: user.profile_picture }
-      : require('../assets/default_picture.png')
-  ), [user?.profile_picture]);
+  const profileImageSource = useMemo(() => {
+    const resolved = resolveImageUrl(user?.profile_picture);
+    return resolved ? { uri: resolved } : require('../assets/default_picture.png');
+  }, [user?.profile_picture]);
 
   const scrollY = useRef(new Animated.Value(0)).current;
 
