@@ -11,7 +11,6 @@ export const useRating = ({ entityType, entityId, enabled = true }) => {
   const { showToast } = useToast();
   const queryKey = queryKeys.userRating(entityType, entityId);
   const detailsQueryKey = queryKeys[entityType === 'song' ? 'songDetails' : entityType === 'album' ? 'albumDetails' : 'artistDetails'](entityId);
-  const chartsQueryKey = queryKeys.charts(entityType, 20);
 
   const query = useQuery({
     queryKey,
@@ -27,8 +26,8 @@ export const useRating = ({ entityType, entityId, enabled = true }) => {
   const invalidateRelated = () => {
     queryClient.invalidateQueries({ queryKey });
     queryClient.invalidateQueries({ queryKey: detailsQueryKey });
-    queryClient.invalidateQueries({ queryKey: chartsQueryKey });
-    queryClient.invalidateQueries({ queryKey: queryKeys.activity(20) });
+    queryClient.invalidateQueries({ queryKey: ['charts', entityType] });
+    queryClient.invalidateQueries({ queryKey: ['activity'] });
   };
 
   const createMutation = useMutation({
