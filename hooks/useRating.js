@@ -5,7 +5,7 @@ import { queryKeys } from '../api/queryKeys';
 import { useToast } from '../context/ToastContext';
 import { getApiErrorMessage } from '../utils/errors';
 
-export const useRating = ({ entityType, entityId, enabled = true }) => {
+export const useRating = ({ entityType, entityId, name, image, artist, enabled = true }) => {
   const { axiosInstance } = useContext(AuthContext);
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -31,7 +31,7 @@ export const useRating = ({ entityType, entityId, enabled = true }) => {
   };
 
   const createMutation = useMutation({
-    mutationFn: (rating) => axiosInstance.post('/rate_entity', { entityType, entityId, rating }),
+    mutationFn: (rating) => axiosInstance.post('/rate_entity', { entityType, entityId, rating, name, image, artist }),
     onSuccess: (_response, rating) => {
       queryClient.setQueryData(queryKey, rating);
       invalidateRelated();
@@ -43,7 +43,7 @@ export const useRating = ({ entityType, entityId, enabled = true }) => {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (rating) => axiosInstance.put('/rate_entity', { entityType, entityId, rating }),
+    mutationFn: (rating) => axiosInstance.put('/rate_entity', { entityType, entityId, rating, name, image, artist }),
     onSuccess: (_response, rating) => {
       queryClient.setQueryData(queryKey, rating);
       invalidateRelated();

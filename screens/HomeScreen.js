@@ -582,8 +582,8 @@ export default function HomeScreen({ navigation }) {
                     </View>
                   </View>
                   <Text style={styles.activityText}>
-                    {activity.type === 'comment' && `Commented: "${activity.text}"`}
-                    {activity.type === 'rating' && `Rated ${activity.entityType} ${activity.rating}/10`}
+                    {activity.type === 'comment' && `Commented on ${activity.name || activity.entityType}: "${activity.text}"`}
+                    {activity.type === 'rating' && `Rated ${activity.name || activity.entityType} ${activity.rating}/10`}
                     {activity.type === 'favorite' && `Favorited ${activity.name || activity.entityType}`}
                   </Text>
                 </TouchableOpacity>

@@ -61,8 +61,8 @@ export default function ActivityScreen({ navigation }) {
           </Text>
         )}
         <Text style={styles.text}>
-          {item.type === 'comment' && `Commented: "${item.text}"`}
-          {item.type === 'rating' && `Rated ${item.entityType} ${item.rating}/10`}
+          {item.type === 'comment' && `Commented on ${item.name || item.entityType}: "${item.text}"`}
+          {item.type === 'rating' && `Rated ${item.name || item.entityType} ${item.rating}/10`}
           {item.type === 'favorite' && `Favorited ${item.name || item.entityType}`}
         </Text>
       </View>

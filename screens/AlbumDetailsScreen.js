@@ -50,7 +50,14 @@ const AlbumDetailsScreen = ({ route }) => {
   const [newComment, setNewComment] = useState('');
 
   const { favorites, invalidateFavorites } = useFavorites();
-  const userRatingQuery = useRating({ entityType: 'album', entityId: album.id, enabled: Boolean(albumData) });
+  const userRatingQuery = useRating({
+    entityType: 'album',
+    entityId: album.id,
+    enabled: Boolean(albumData),
+    name: albumData?.name,
+    image: albumData?.cover_image,
+    artist: albumData?.artists?.join(', '),
+  });
 
   const albumDetailsQuery = useQuery({
     queryKey: queryKeys.albumDetails(album.id),
@@ -109,6 +116,7 @@ const AlbumDetailsScreen = ({ route }) => {
           entityId: album.id,
           name: albumData.name,
           image: albumData.cover_image,
+          artist: albumData.artists?.join(', '),
         });
       }
       invalidateFavorites();
@@ -176,6 +184,9 @@ const AlbumDetailsScreen = ({ route }) => {
     try {
       const response = await axiosInstance.post(`/album/${album.id}/comments`, {
         comment_text: newComment,
+        name: albumData?.name,
+        image: albumData?.cover_image,
+        artist: albumData?.artists?.join(', '),
       });
 
       const updatedComments = sortComments([response.data.comment, ...comments]);

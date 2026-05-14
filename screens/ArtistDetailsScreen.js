@@ -55,7 +55,14 @@ const ArtistDetailsScreen = ({ route }) => {
   const [newComment, setNewComment] = useState('');
 
   const { favorites, invalidateFavorites } = useFavorites();
-  const userRatingQuery = useRating({ entityType: 'artist', entityId: artistId, enabled: Boolean(artistData?.artist?.id) });
+  const userRatingQuery = useRating({
+    entityType: 'artist',
+    entityId: artistId,
+    enabled: Boolean(artistData?.artist?.id),
+    name: artistData?.artist?.name,
+    image: artistData?.artist?.image,
+    artist: artistData?.artist?.name,
+  });
 
   const artistDetailsQuery = useQuery({
     queryKey: queryKeys.artistDetails(artistId),
@@ -154,6 +161,7 @@ const ArtistDetailsScreen = ({ route }) => {
           entityId: artistId,
           name: artistData.artist.name,
           image: artistData.artist.image,
+          artist: artistData.artist.name,
         });
       }
       invalidateFavorites();
@@ -218,6 +226,9 @@ const ArtistDetailsScreen = ({ route }) => {
     try {
       const response = await axiosInstance.post(`/artist/${artistData.artist.id}/comments`, {
         comment_text: newComment,
+        name: artistData?.artist?.name,
+        image: artistData?.artist?.image,
+        artist: artistData?.artist?.name,
       });
 
       const updatedComments = sortComments([response.data.comment, ...comments]);

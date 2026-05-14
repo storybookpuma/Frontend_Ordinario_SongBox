@@ -7,3 +7,5 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 assets/video-backup/
+.agents/
+skills-lock.json

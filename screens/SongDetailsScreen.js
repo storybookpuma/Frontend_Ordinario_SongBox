@@ -53,7 +53,14 @@ export default function SongDetailsScreen({ route }) {
   const [newComment, setNewComment] = useState(''); 
 
   const { favorites, invalidateFavorites } = useFavorites();
-  const userRatingQuery = useRating({ entityType: 'song', entityId: songId, enabled: Boolean(songData) });
+  const userRatingQuery = useRating({
+    entityType: 'song',
+    entityId: songId,
+    enabled: Boolean(songData),
+    name: songData?.name,
+    image: songData?.cover_image,
+    artist: songData?.artists?.join(', '),
+  });
 
   const songDetailsQuery = useQuery({
     queryKey: queryKeys.songDetails(songId),
@@ -119,6 +126,7 @@ export default function SongDetailsScreen({ route }) {
           entityId: songId,
           name: songData.name,
           image: songData.cover_image,
+          artist: songData.artists?.join(', '),
         });
       }
       invalidateFavorites();
@@ -190,6 +198,9 @@ export default function SongDetailsScreen({ route }) {
     try {
       const response = await axiosInstance.post(`/song/${songId}/comments`, {
         comment_text: newComment,
+        name: songData?.name,
+        image: songData?.cover_image,
+        artist: songData?.artists?.join(', '),
       });
 
       const updatedComments = sortComments([response.data.comment, ...comments]);
