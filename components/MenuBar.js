@@ -55,20 +55,51 @@ const MenuBar = () => {
     }
   }, [navigation, route.name]);
 
-  const navigateFromTouch = useCallback((locationX) => {
-    if (!barWidth) return;
+  const getTouchProgress = useCallback((locationX) => {
+    if (!barWidth || !itemWidth) return 0;
 
     const clampedX = Math.max(12, Math.min(locationX, barWidth - 12));
-    const index = Math.max(0, Math.min(Math.floor((clampedX - 12) / itemWidth), TABS.length - 1));
+    const centeredX = clampedX - 12 - (itemWidth / 2);
+    return Math.max(0, Math.min(centeredX / itemWidth, TABS.length - 1));
+  }, [barWidth, itemWidth]);
+
+  const settleToNearestTab = useCallback((locationX) => {
+    const progress = getTouchProgress(locationX);
+    const index = Math.max(0, Math.min(Math.round(progress), TABS.length - 1));
+
+    Animated.spring(activeIndexAnim, {
+      toValue: index,
+      useNativeDriver: true,
+      stiffness: 210,
+      damping: 24,
+      mass: 0.85,
+    }).start();
+
     navigateToTab(TABS[index]);
-  }, [barWidth, itemWidth, navigateToTab]);
+  }, [activeIndexAnim, getTouchProgress, navigateToTab]);
 
   const panResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4,
-    onPanResponderGrant: (event) => navigateFromTouch(event.nativeEvent.locationX),
-    onPanResponderMove: (event) => navigateFromTouch(event.nativeEvent.locationX),
-  }), [navigateFromTouch]);
+    onPanResponderGrant: (event) => {
+      activeIndexAnim.stopAnimation();
+      activeIndexAnim.setValue(getTouchProgress(event.nativeEvent.locationX));
+    },
+    onPanResponderMove: (event) => {
+      activeIndexAnim.setValue(getTouchProgress(event.nativeEvent.locationX));
+    },
+    onPanResponderRelease: (event) => settleToNearestTab(event.nativeEvent.locationX),
+    onPanResponderTerminate: () => {
+      const activeIndex = Math.max(TABS.indexOf(route.name), 0);
+      Animated.spring(activeIndexAnim, {
+        toValue: activeIndex,
+        useNativeDriver: true,
+        stiffness: 210,
+        damping: 24,
+        mass: 0.85,
+      }).start();
+    },
+  }), [activeIndexAnim, getTouchProgress, route.name, settleToNearestTab]);
 
   const activeTranslateX = activeIndexAnim.interpolate({
     inputRange: [0, 1, 2],
@@ -162,7 +193,6 @@ const MenuBar = () => {
                 end={{ x: 0.95, y: 1 }}
                 style={styles.liquidThumbGradient}
               />
-              <View style={styles.thumbHighlight} />
             </Animated.View>
           ) : null}
           <Pressable
@@ -251,7 +281,7 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.32)',
+    borderColor: 'rgba(255,255,255,0.18)',
     shadowColor: '#D8B4FE',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.38,
@@ -269,15 +299,6 @@ const styles = StyleSheet.create({
   liquidThumbGradient: {
     flex: 1,
     backgroundColor: 'rgba(168,85,247,0.22)',
-  },
-  thumbHighlight: {
-    position: 'absolute',
-    top: 8,
-    left: 16,
-    right: 18,
-    height: 1,
-    borderRadius: 1,
-    backgroundColor: 'rgba(255,255,255,0.58)',
   },
   menuItem: {
     alignItems: 'center',
