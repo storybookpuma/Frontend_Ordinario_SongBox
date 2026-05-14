@@ -25,6 +25,8 @@ import { useFavorites } from '../hooks/useFavorites';
 import { useRating } from '../hooks/useRating';
 import { getApiErrorMessage } from '../utils/errors';
 
+const AnimatedImage = Animated.createAnimatedComponent(Image);
+
 const HEADER_MAX = 340;
 const HEADER_MIN = 120;
 
@@ -64,12 +66,6 @@ const ArtistDetailsScreen = ({ route }) => {
       });
       return response.data;
     },
-  });
-
-  const headerHeight = scrollY.interpolate({
-    inputRange: [0, HEADER_MAX - HEADER_MIN],
-    outputRange: [HEADER_MAX, HEADER_MIN],
-    extrapolate: 'clamp',
   });
 
   const imageOpacity = scrollY.interpolate({
@@ -199,18 +195,17 @@ const ArtistDetailsScreen = ({ route }) => {
         scrollEventThrottle={16}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
+          { useNativeDriver: true }
         )}
         keyboardShouldPersistTaps="handled"
       >
         {/* Hero */}
-        <Animated.View style={[styles.hero, { height: headerHeight }]}>
+        <View style={[styles.hero, { height: HEADER_MAX }]}>
           <Image
             source={{ uri: artistData.artist.image }}
             style={styles.heroImage}
             contentFit="cover"
             cachePolicy="memory-disk"
-            transition={200}
           />
           <LinearGradient
             colors={['transparent', 'rgba(23,21,21,0.6)', '#171515']}
@@ -220,14 +215,13 @@ const ArtistDetailsScreen = ({ route }) => {
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Icon name="chevron-left" size={22} color="#FFF" />
           </TouchableOpacity>
-          <Animated.Image
+          <AnimatedImage
             source={{ uri: artistData.artist.image }}
             style={[styles.heroCover, { opacity: imageOpacity }]}
             contentFit="cover"
             cachePolicy="memory-disk"
-            transition={200}
           />
-        </Animated.View>
+        </View>
 
         {/* Header */}
         <View style={styles.header}>
@@ -372,7 +366,11 @@ const styles = StyleSheet.create({
     width: 160,
     height: 160,
     borderRadius: 80,
-    boxShadow: '0 12px 28px rgba(0,0,0,0.35)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 28,
+    elevation: 8,
   },
   backButton: {
     position: 'absolute',
@@ -495,7 +493,11 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 18,
     marginBottom: 8,
-    boxShadow: '0 6px 14px rgba(0,0,0,0.2)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 4,
   },
   albumCoverLarge: {
     height: 150,
