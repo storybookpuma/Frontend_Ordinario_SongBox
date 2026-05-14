@@ -9,4 +9,6 @@ export const queryKeys = {
   favorites: ['favorites'],
   followingDetails: (ids = []) => ['followingDetails', ids.join(',')],
   comments: (entityType, entityId) => ['comments', entityType, entityId],
+  charts: (entityType, limit) => ['charts', entityType, limit],
+  activity: (limit) => ['activity', limit],
 };

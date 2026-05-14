@@ -1,5 +1,5 @@
 import { useContext } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
 import { queryKeys } from '../api/queryKeys';
 import { useToast } from '../context/ToastContext';
@@ -22,19 +22,84 @@ export const useRating = ({ entityType, entityId, enabled = true }) => {
     },
   });
 
+  const invalidateRelated = () => {
+    queryClient.invalidateQueries({ queryKey });
+    queryClient.invalidateQueries({ queryKey: queryKeys[entityType === 'song' ? 'songDetails' : entityType === 'album' ? 'albumDetails' : 'artistDetails'](entityId) });
+  };
+
+  const createMutation = useMutation({
+    mutationFn: (rating) => axiosInstance.post('/rate_entity', { entityType, entityId, rating }),
+    onSuccess: (response) => {
+      queryClient.setQueryData(queryKey, response.data.rating);
+      invalidateRelated();
+      showToast('Tu calificación ha sido registrada.');
+    },
+    onError: (error) => {
+      showToast(getApiErrorMessage(error, 'No se pudo registrar tu calificación.'));
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (rating) => axiosInstance.put('/rate_entity', { entityType, entityId, rating }),
+    onSuccess: (response) => {
+      queryClient.setQueryData(queryKey, response.data.rating);
+      invalidateRelated();
+      showToast('Tu calificación ha sido actualizada.');
+    },
+    onError: (error) => {
+      showToast(getApiErrorMessage(error, 'No se pudo actualizar tu calificación.'));
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => axiosInstance.delete('/rate_entity', { data: { entityType, entityId } }),
+    onSuccess: () => {
+      queryClient.setQueryData(queryKey, 0);
+      invalidateRelated();
+      showToast('Tu calificación ha sido eliminada.');
+    },
+    onError: (error) => {
+      showToast(getApiErrorMessage(error, 'No se pudo eliminar tu calificación.'));
+    },
+  });
+
   const rateEntity = async ({ rating, currentRating, setUserRating, onSuccess }) => {
+    const previousRating = currentRating;
     setUserRating(rating);
 
     try {
-      const response = await axiosInstance.post('/rate_entity', { entityType, entityId, rating });
-      queryClient.setQueryData(queryKey, rating);
+      let response;
+      if (previousRating === 0) {
+        response = await createMutation.mutateAsync(rating);
+      } else {
+        response = await updateMutation.mutateAsync(rating);
+      }
       onSuccess?.(response.data);
-      showToast('Tu calificación ha sido registrada.');
     } catch (error) {
-      setUserRating(currentRating);
-      showToast(getApiErrorMessage(error, 'No se pudo registrar tu calificación.'));
+      setUserRating(previousRating);
+      throw error;
     }
   };
 
-  return { ...query, rateEntity };
+  const deleteRating = async ({ currentRating, setUserRating, onSuccess }) => {
+    const previousRating = currentRating;
+    setUserRating(0);
+
+    try {
+      const response = await deleteMutation.mutateAsync();
+      onSuccess?.(response.data);
+    } catch (error) {
+      setUserRating(previousRating);
+      throw error;
+    }
+  };
+
+  const isMutating = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+
+  return {
+    ...query,
+    rateEntity,
+    deleteRating,
+    isMutating,
+  };
 };

@@ -20,6 +20,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SkeletonCard } from '../components/Skeleton';
 import { normalizeAlbum, normalizeArtist, normalizeSong } from '../utils/normalizers';
 import { queryKeys } from '../api/queryKeys';
+import { useCharts } from '../hooks/useCharts';
+import { useActivity } from '../hooks/useActivity';
 
 // Datos estáticos para el carrusel superior
 const DATA = [
@@ -88,6 +90,9 @@ export default function HomeScreen({ navigation }) {
   const indicatorAnim = useRef(new Animated.Value(0)).current;
   const headerScrollY = useRef(new Animated.Value(0)).current;
   const [recentlyListenedData, setRecentlyListenedData] = useState([]);
+
+  const chartsQuery = useCharts({ entityType: 'song', limit: 10 });
+  const activityQuery = useActivity({ limit: 10 });
 
   const homeFeedQuery = useQuery({
     queryKey: queryKeys.homeFeed,
@@ -480,6 +485,62 @@ export default function HomeScreen({ navigation }) {
         {renderHorizontalSection('Trending Artists', artistsData, renderArtistCard, 'No hay artistas disponibles.')}
         {renderHorizontalSection('More Releases', moreAlbumsData, renderAlbumCard, 'Haz pull-to-refresh para intentar cargar más álbumes.')}
         {renderHorizontalSection('More Artists', moreArtistsData, renderArtistCard, 'Haz pull-to-refresh para intentar cargar más artistas.')}
+
+        {/* Top Rated Charts */}
+        <View style={styles.extraSection}>
+          <Text style={styles.sectionTitle}>Top Rated Songs</Text>
+          {chartsQuery.isLoading ? (
+            renderCardSkeletonRow()
+          ) : chartsQuery.data?.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.extraSectionList}>
+              {chartsQuery.data.map((item, index) => (
+                <TouchableOpacity
+                  key={`chart-${item.entityId || index}`}
+                  style={styles.chartCard}
+                  onPress={() => {
+                    if (item.entityId) {
+                      navigation.navigate('SongDetailsScreen', { songId: item.entityId });
+                    }
+                  }}
+                >
+                  <Text style={styles.chartRank}>#{index + 1}</Text>
+                  <Text style={styles.chartRating}>{item.averageRating?.toFixed(1)} ★</Text>
+                  <Text style={styles.chartCount}>{item.ratingCount} votes</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : (
+            <Text style={styles.emptySectionText}>No hay calificaciones aún.</Text>
+          )}
+        </View>
+
+        {/* Activity Feed */}
+        <View style={styles.extraSection}>
+          <Text style={styles.sectionTitle}>Recent Activity</Text>
+          {activityQuery.isLoading ? (
+            renderCardSkeletonRow()
+          ) : activityQuery.data?.length > 0 ? (
+            <View style={styles.activityList}>
+              {activityQuery.data.slice(0, 5).map((activity, index) => (
+                <View key={`activity-${index}`} style={styles.activityItem}>
+                  <Text style={styles.activityUsername}>{activity.username}</Text>
+                  <Text style={styles.activityText}>
+                    {activity.type === 'comment' && `commented on ${activity.entityType}: "${activity.text}"`}
+                    {activity.type === 'rating' && `rated ${activity.entityType} ${activity.rating}/10`}
+                    {activity.type === 'favorite' && `favorited ${activity.name || activity.entityType}`}
+                  </Text>
+                  {activity.timestamp && (
+                    <Text style={styles.activityTimestamp}>
+                      {new Date(activity.timestamp).toLocaleDateString()}
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.emptySectionText}>No hay actividad reciente.</Text>
+          )}
+        </View>
       </Animated.ScrollView>
     </SafeAreaView>
   );
@@ -701,5 +762,59 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     paddingHorizontal: 20,
     paddingVertical: 18,
+  },
+  chartCard: {
+    width: 120,
+    height: 120,
+    marginRight: 14,
+    borderRadius: 20,
+    backgroundColor: 'rgba(160, 113, 202, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(160, 113, 202, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+  },
+  chartRank: {
+    color: '#A071CA',
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
+  chartRating: {
+    color: '#FFD700',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 6,
+  },
+  chartCount: {
+    color: '#B9B0C7',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  activityList: {
+    paddingHorizontal: 20,
+    gap: 10,
+  },
+  activityItem: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+  activityUsername: {
+    color: '#A071CA',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  activityText: {
+    color: '#FFF',
+    fontSize: 13,
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  activityTimestamp: {
+    color: '#888',
+    fontSize: 11,
+    marginTop: 6,
   },
 });

@@ -144,12 +144,25 @@ export default function SongDetailsScreen({ route }) {
       Alert.alert('Autenticación requerida', 'Debes iniciar sesión para calificar.');
       return;
     }
-  
-    if (rating === 0) {
-      Alert.alert('Acción no permitida', 'No puedes eliminar tu calificación una vez realizada.');
+
+    if (rating === 0 && userRating > 0) {
+      try {
+        await userRatingQuery.deleteRating({
+          currentRating: userRating,
+          setUserRating,
+          onSuccess: (data) => {
+            setAverageRating(data.averageRating);
+            setRatingCount(data.ratingCount);
+          },
+        });
+      } catch (error) {
+        showToast(getApiErrorMessage(error, 'No se pudo eliminar tu calificación.'));
+      }
       return;
     }
-  
+
+    if (rating === 0) return;
+
     const previousRating = userRating;
     try {
       await userRatingQuery.rateEntity({
@@ -322,13 +335,20 @@ export default function SongDetailsScreen({ route }) {
 
             {/* Sección de calificaciones */}
             <View style={styles.ratingSection}>
-              <Text style={styles.sectionTitle}>Califica esta canción</Text>
-              <StarRating 
-                maxStars={10} 
-                currentRating={userRating} 
-                onRatingChange={handleRatingChange} 
-                editable={userRating === 0} 
+              <Text style={styles.sectionTitle}>
+                {userRating > 0 ? 'Tu calificación' : 'Califica esta canción'}
+              </Text>
+              <StarRating
+                maxStars={10}
+                currentRating={userRating}
+                onRatingChange={handleRatingChange}
+                editable={Boolean(user)}
               />
+              {userRating > 0 && (
+                <TouchableOpacity onPress={() => handleRatingChange(0)} disabled={userRatingQuery.isMutating}>
+                  <Text style={styles.deleteRatingText}>Eliminar calificación</Text>
+                </TouchableOpacity>
+              )}
               <Text style={styles.averageRatingText}>
                 Promedio de calificaciones: {averageRating.toFixed(1)} ({ratingCount} {ratingCount === 1 ? 'calificación' : 'calificaciones'})
               </Text>
@@ -502,6 +522,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     marginTop: 10,
+  },
+  deleteRatingText: {
+    color: '#E74C3C',
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
   },
   menuContainer: {
     position: 'absolute',
