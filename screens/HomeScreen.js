@@ -17,7 +17,7 @@ import { AuthContext } from '../context/AuthContext';
 import LoadingScreen from '../components/LoadingScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SkeletonCard, SkeletonList } from '../components/Skeleton';
-import { normalizeAlbum, normalizeArtist, normalizeSong } from '../utils/normalizers';
+import { normalizeAlbum, normalizeArtist, normalizeSong, resolveImageUrl } from '../utils/normalizers';
 import { queryKeys } from '../api/queryKeys';
 import { useCharts } from '../hooks/useCharts';
 import { useActivity } from '../hooks/useActivity';
@@ -553,15 +553,33 @@ export default function HomeScreen({ navigation }) {
                   }}
                 >
                   <View style={styles.activityHeader}>
-                    <Text style={styles.activityIcon}>
-                      {activity.type === 'comment' ? '💬' : activity.type === 'rating' ? '⭐' : '❤️'}
-                    </Text>
-                    <Text style={styles.activityUsername}>{activity.username}</Text>
-                    {activity.timestamp && (
-                      <Text style={styles.activityTimestamp}>
-                        {new Date(activity.timestamp).toLocaleDateString()}
-                      </Text>
+                    {activity.userPhoto ? (
+                      <Image
+                        source={{ uri: resolveImageUrl(activity.userPhoto) }}
+                        style={styles.activityAvatar}
+                        contentFit="cover"
+                        transition={200}
+                      />
+                    ) : (
+                      <View style={[styles.activityAvatar, styles.activityAvatarPlaceholder]}>
+                        <Text style={styles.activityAvatarText}>
+                          {(activity.username || '?').charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
                     )}
+                    <View style={styles.activityHeaderContent}>
+                      <View style={styles.activityHeaderTop}>
+                        <Text style={styles.activityUsername}>{activity.username}</Text>
+                        <Text style={styles.activityIconSmall}>
+                          {activity.type === 'comment' ? '💬' : activity.type === 'rating' ? '⭐' : '❤️'}
+                        </Text>
+                      </View>
+                      {activity.timestamp && (
+                        <Text style={styles.activityTimestamp}>
+                          {new Date(activity.timestamp).toLocaleDateString()}
+                        </Text>
+                      )}
+                    </View>
                   </View>
                   <Text style={styles.activityText}>
                     {activity.type === 'comment' && `Commented: "${activity.text}"`}
@@ -867,16 +885,38 @@ const styles = StyleSheet.create({
   activityHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
-  activityIcon: {
-    fontSize: 16,
+  activityAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(160,113,202,0.2)',
+  },
+  activityAvatarPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activityAvatarText: {
+    color: '#A071CA',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  activityHeaderContent: {
+    flex: 1,
+  },
+  activityHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  activityIconSmall: {
+    fontSize: 14,
   },
   activityUsername: {
     color: '#A071CA',
     fontWeight: 'bold',
     fontSize: 14,
-    flex: 1,
   },
   activityText: {
     color: '#FFF',
@@ -887,6 +927,7 @@ const styles = StyleSheet.create({
   activityTimestamp: {
     color: '#888',
     fontSize: 11,
+    marginTop: 2,
   },
   seeMoreButton: {
     alignSelf: 'flex-start',

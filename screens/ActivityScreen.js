@@ -6,9 +6,11 @@ import {
   TouchableOpacity,
   FlatList,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useActivity } from '../hooks/useActivity';
 import { SkeletonList } from '../components/Skeleton';
+import { resolveImageUrl } from '../utils/normalizers';
 
 const ACTIVITY_ICONS = {
   comment: '💬',
@@ -34,16 +36,30 @@ export default function ActivityScreen({ navigation }) {
         }
       }}
     >
-      <Text style={styles.icon}>{ACTIVITY_ICONS[item.type] || '•'}</Text>
+      {item.userPhoto ? (
+        <Image
+          source={{ uri: resolveImageUrl(item.userPhoto) }}
+          style={styles.avatar}
+          contentFit="cover"
+          transition={200}
+        />
+      ) : (
+        <View style={[styles.avatar, styles.avatarPlaceholder]}>
+          <Text style={styles.avatarText}>
+            {(item.username || '?').charAt(0).toUpperCase()}
+          </Text>
+        </View>
+      )}
       <View style={styles.content}>
         <View style={styles.headerRow}>
           <Text style={styles.username}>{item.username}</Text>
-          {item.timestamp && (
-            <Text style={styles.timestamp}>
-              {new Date(item.timestamp).toLocaleDateString()}
-            </Text>
-          )}
+          <Text style={styles.icon}>{ACTIVITY_ICONS[item.type] || '•'}</Text>
         </View>
+        {item.timestamp && (
+          <Text style={styles.timestamp}>
+            {new Date(item.timestamp).toLocaleDateString()}
+          </Text>
+        )}
         <Text style={styles.text}>
           {item.type === 'comment' && `Commented: "${item.text}"`}
           {item.type === 'rating' && `Rated ${item.entityType} ${item.rating}/10`}
@@ -104,10 +120,25 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 10,
   },
-  icon: {
-    fontSize: 20,
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(160,113,202,0.2)',
     marginRight: 12,
     marginTop: 2,
+  },
+  avatarPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    color: '#A071CA',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  icon: {
+    fontSize: 14,
   },
   content: {
     flex: 1,
@@ -125,6 +156,7 @@ const styles = StyleSheet.create({
   timestamp: {
     color: '#888',
     fontSize: 11,
+    marginTop: 2,
   },
   text: {
     color: '#FFF',

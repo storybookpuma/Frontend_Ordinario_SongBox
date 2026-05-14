@@ -10,5 +10,5 @@ export const queryKeys = {
   followingDetails: (ids = []) => ['followingDetails', ids.join(',')],
   comments: (entityType, entityId) => ['comments', entityType, entityId],
   charts: (entityType, limit) => ['charts', entityType, limit],
-  activity: (limit) => ['activity', limit],
+  activity: (limit, scope = 'personalized') => ['activity', scope, limit],
 };
