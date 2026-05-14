@@ -169,15 +169,11 @@ const AlbumDetailsScreen = ({ route }) => {
   // Función para publicar un nuevo comentario
   const handlePostComment = async () => {
     if (newComment.trim().length === 0) {
-      Alert.alert("Error", "El comentario no puede estar vacío.");
+      showToast("El comentario no puede estar vacío.");
       return;
     }
 
     try {
-      if (!axiosInstance) {
-        throw new Error("axiosInstance no está definido en el contexto.");
-      }
-
       const response = await axiosInstance.post(`/album/${album.id}/comments`, {
         comment_text: newComment,
       });
@@ -185,9 +181,8 @@ const AlbumDetailsScreen = ({ route }) => {
       const updatedComments = sortComments([response.data.comment, ...comments]);
       setComments(updatedComments);
       setNewComment('');
-    } catch (error) {
-      console.error("Error al agregar el comentario:", error.message);
-      Alert.alert("Error", "No se pudo agregar el comentario. Verifica la conexión.");
+    } catch (_error) {
+      showToast("No se pudo agregar el comentario. Verifica la conexión.");
     }
   };
 

@@ -8,7 +8,6 @@ import {
   Animated,
   RefreshControl,
   Linking,
-  Alert,
   useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -22,6 +21,7 @@ import { normalizeAlbum, normalizeArtist, normalizeSong } from '../utils/normali
 import { queryKeys } from '../api/queryKeys';
 import { useCharts } from '../hooks/useCharts';
 import { useActivity } from '../hooks/useActivity';
+import { useToast } from '../context/ToastContext';
 
 // Datos estáticos para el carrusel superior
 const DATA = [
@@ -75,6 +75,7 @@ const formatSong = (song) => {
 
 export default function HomeScreen({ navigation }) {
   const { axiosInstance, isLoading: isAuthLoading, user } = useContext(AuthContext);
+  const { showToast } = useToast();
   const { width: screenWidth } = useWindowDimensions();
 
   const [activeTab, setActiveTab] = useState("News");
@@ -191,13 +192,12 @@ export default function HomeScreen({ navigation }) {
       ) {
         console.warn('Spotify data partially unavailable. User may need to reconnect Spotify.');
       }
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      Alert.alert("Error", "Hubo un problema al cargar los datos. Por favor, intenta nuevamente.");
+    } catch (_error) {
+      showToast("Hubo un problema al cargar los datos. Intenta nuevamente.");
     } finally {
       setIsFetchingHome(false);
     }
-  }, [axiosInstance]);
+  }, [axiosInstance, showToast]);
 
   useEffect(() => {
     const initialize = async () => {
@@ -216,14 +216,13 @@ export default function HomeScreen({ navigation }) {
           setMoreAlbumsData(parsedCache.moreAlbumsData || []);
           setMoreArtistsData(parsedCache.moreArtistsData || []);
         }
-      } catch (error) {
-        console.error("Error al inicializar la HomeScreen:", error);
-        Alert.alert("Error", "Hubo un problema al inicializar la aplicación. Por favor, intenta nuevamente.");
+      } catch (_error) {
+        showToast("Hubo un problema al inicializar la aplicación. Intenta nuevamente.");
       }
     };
 
     initialize();
-  }, [fetchData, user]);
+  }, [fetchData, user, showToast]);
 
   useEffect(() => {
     if (activeTab === "News") {
@@ -429,7 +428,7 @@ export default function HomeScreen({ navigation }) {
                     artist: item, 
                   });
                 } else {
-                  Alert.alert('Información', 'Esta funcionalidad aún no está disponible.');
+                  showToast('Esta funcionalidad aún no está disponible.');
                 }
               }}
             >
@@ -467,7 +466,7 @@ export default function HomeScreen({ navigation }) {
                       song: song, 
                     });
                   } else {
-                    Alert.alert('Información', 'Esta funcionalidad aún no está disponible.');
+                    showToast('Esta funcionalidad aún no está disponible.');
                   }
                 }}
               >

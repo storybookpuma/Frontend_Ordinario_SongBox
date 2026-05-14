@@ -68,10 +68,10 @@ export default function SongDetailsScreen({ route }) {
 
   useEffect(() => {
     if (!songId) {
-      Alert.alert('Error', 'No se proporcionó el ID de la canción.');
+      showToast('No se proporcionó el ID de la canción.');
       navigation.goBack();
     }
-  }, [navigation, songId]);
+  }, [navigation, songId, showToast]);
 
   const imageScale = scrollY.interpolate({
     inputRange: [-100, 0],
@@ -183,25 +183,20 @@ export default function SongDetailsScreen({ route }) {
 
   const handlePostComment = async () => {
     if (newComment.trim().length === 0) {
-      Alert.alert("Error", "El comentario no puede estar vacío.");
+      showToast("El comentario no puede estar vacío.");
       return;
     }
 
     try {
-      if (!axiosInstance) {
-        throw new Error("axiosInstance no está definido en el contexto.");
-      }
-
       const response = await axiosInstance.post(`/song/${songId}/comments`, {
         comment_text: newComment,
       });
 
       const updatedComments = sortComments([response.data.comment, ...comments]);
-      setComments(updatedComments); 
+      setComments(updatedComments);
       setNewComment('');
-    } catch (error) {
-      console.error("Error al agregar el comentario:", error.message);
-      Alert.alert("Error", "No se pudo agregar el comentario. Verifica la conexión.");
+    } catch (_error) {
+      showToast("No se pudo agregar el comentario. Verifica la conexión.");
     }
   };
 
@@ -281,8 +276,7 @@ export default function SongDetailsScreen({ route }) {
                     artistName: songData.artists[0],
                   });
                 } else {
-                  console.warn('No se encontró artist_ids en songData');
-                  Alert.alert('No se pudo obtener la información del artista.');
+                  showToast('No se pudo obtener la información del artista.');
                 }
               }}
             >
@@ -297,8 +291,7 @@ export default function SongDetailsScreen({ route }) {
                     album: { id: songData.album_id },
                   });
                 } else {
-                  console.warn('No se encontró album_id en songData');
-                  Alert.alert('No se pudo obtener la información del álbum.');
+                  showToast('No se pudo obtener la información del álbum.');
                 }
               }}
             >
