@@ -35,7 +35,14 @@ const AlbumDetailsScreen = ({ route }) => {
   const scrollY = useRef(new Animated.Value(0)).current;
   const { axiosInstance, user } = useContext(AuthContext);
 
-  const { album } = route.params;
+  const album = route?.params?.album;
+
+  useEffect(() => {
+    if (!album || !album.id) {
+      showToast('No se pudo cargar la información del álbum.');
+      navigation.goBack();
+    }
+  }, [album, navigation, showToast]);
 
   const [albumData, setAlbumData] = useState(null);
   const [comments, setComments] = useState([]);
@@ -52,19 +59,19 @@ const AlbumDetailsScreen = ({ route }) => {
   const { favorites, invalidateFavorites } = useFavorites();
   const userRatingQuery = useRating({
     entityType: 'album',
-    entityId: album.id,
-    enabled: Boolean(albumData),
+    entityId: album?.id,
+    enabled: Boolean(album?.id && albumData),
     name: albumData?.name,
     image: albumData?.cover_image,
     artist: albumData?.artists?.join(', '),
   });
 
   const albumDetailsQuery = useQuery({
-    queryKey: queryKeys.albumDetails(album.id),
-    enabled: Boolean(album.id && axiosInstance),
+    queryKey: queryKeys.albumDetails(album?.id),
+    enabled: Boolean(album?.id && axiosInstance),
     queryFn: async () => {
       const response = await axiosInstance.get('/album_details', {
-        params: { album_id: album.id },
+        params: { album_id: album?.id },
       });
       return response.data.album;
     },

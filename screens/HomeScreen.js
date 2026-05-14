@@ -313,7 +313,7 @@ export default function HomeScreen({ navigation }) {
   const renderArtistCard = (item, index) => (
     <TouchableOpacity
       key={`${item.id || item.name}-${index}`}
-      style={[styles.artistCircleCard, index % 2 === 1 && styles.artistCircleCardSmall]}
+      style={[styles.artistCircleItem, index % 2 === 1 && styles.artistCircleItemSmall]}
       onPress={() => item.id && navigation.navigate('ArtistDetailsScreen', {
         artistId: item.id,
         artistName: item.name,
@@ -836,20 +836,14 @@ const styles = StyleSheet.create({
   largeArtistContentCard: {
     backgroundColor: 'rgba(160,113,202,0.12)',
   },
-  artistCircleCard: {
+  artistCircleItem: {
     width: 150,
     marginRight: 18,
     alignItems: 'center',
-    padding: 10,
-    borderRadius: 32,
-    backgroundColor: 'rgba(160,113,202,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
   },
-  artistCircleCardSmall: {
+  artistCircleItemSmall: {
     width: 132,
     marginTop: 10,
-    backgroundColor: 'rgba(255,255,255,0.055)',
   },
   artistCircleImage: {
     width: 116,
