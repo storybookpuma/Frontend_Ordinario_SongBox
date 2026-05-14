@@ -16,6 +16,8 @@ import Icon from 'react-native-vector-icons/FontAwesome';
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import CommentSection from '../components/CommentSection';
+import SpinningDisc from '../components/SpinningDisc';
+import { useSpotifyPlayback } from '../hooks/useSpotifyPlayback';
 import { AuthContext } from '../context/AuthContext';
 import LoadingScreen from '../components/LoadingScreen';
 import { SkeletonCard, SkeletonList } from '../components/Skeleton';
@@ -76,6 +78,8 @@ export default function ProfileScreen({ navigation }) {
       return response.data.favorites || [];
     },
   });
+
+  const { data: currentlyPlaying } = useSpotifyPlayback();
 
   const {
     data: followingUsers = [],
@@ -248,19 +252,29 @@ export default function ProfileScreen({ navigation }) {
     </TouchableOpacity>
   ), [navigation]);
 
-  const renderSongItem = useCallback(({ item }) => (
-    <TouchableOpacity 
-      style={styles.songItem}
-      onPress={() => {
-        navigation.navigate('SongDetailsScreen', { songId: item.entityId });
-      }}
-    >
-      <Image source={{ uri: item.image }} style={styles.songImage} />
-      <View style={styles.songInfo}>
-        <Text style={styles.songTitle}>{item.name}</Text>
-      </View>
-    </TouchableOpacity>
-  ), [navigation]);
+  const renderSongItem = useCallback(({ item }) => {
+    const isNowPlaying = currentlyPlaying?.is_playing && currentlyPlaying?.item?.id === item.entityId;
+    return (
+      <TouchableOpacity
+        style={styles.songItem}
+        onPress={() => {
+          navigation.navigate('SongDetailsScreen', { songId: item.entityId });
+        }}
+      >
+        <Image source={{ uri: item.image }} style={styles.songImage} />
+        <View style={styles.songInfo}>
+          <Text style={styles.songTitle}>{item.name}</Text>
+        </View>
+        {isNowPlaying && (
+          <SpinningDisc
+            source={{ uri: item.image }}
+            size={52}
+            isPlaying={true}
+          />
+        )}
+      </TouchableOpacity>
+    );
+  }, [navigation, currentlyPlaying]);
 
   const renderArtistItem = useCallback(({ item }) => (
     <TouchableOpacity 
