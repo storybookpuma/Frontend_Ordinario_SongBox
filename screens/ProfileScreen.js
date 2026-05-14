@@ -119,7 +119,7 @@ export default function ProfileScreen({ navigation }) {
       const optimisticComment = normalizeComment({
         _id: `optimistic-${Date.now()}`,
         username: user?.username || 'You',
-        user_email: user?.email,
+        user_id: user?.id,
         comment_text: commentText,
         timestamp: new Date().toISOString(),
         likes: 0,

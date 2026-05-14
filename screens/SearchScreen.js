@@ -154,8 +154,6 @@ export default function SearchScreen({ navigation }) {
       ? item.artists.join(', ')
       : selectedCategory === 'Artists' && item.genres
       ? item.genres.join(', ')
-      : selectedCategory === 'Profiles' && item.email
-      ? item.email
       : null
   );
 

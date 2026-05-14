@@ -234,7 +234,7 @@ export default function CommentSection({ entityType, entityId, comments = [], on
                     </TouchableOpacity>
                   </View>
                 </View>
-                {user && user.email === comment.user_email && (
+                {user && String(user.id) === String(comment.user_id) && (
                   <TouchableOpacity onPress={() => handleDeleteComment(comment._id)}>
                     <Text style={styles.deleteText}>Eliminar</Text>
                   </TouchableOpacity>
