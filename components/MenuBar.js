@@ -4,6 +4,7 @@ import Icon from 'react-native-vector-icons/FontAwesome';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 
 const TABS = ['HomeScreen', 'SearchScreen', 'ProfileScreen'];
 
@@ -14,6 +15,7 @@ const MenuBar = () => {
   const activeIndexAnim = useRef(new Animated.Value(Math.max(TABS.indexOf(route.name), 0))).current;
   const thumbPulseAnim = useRef(new Animated.Value(0)).current;
   const itemWidth = barWidth > 0 ? (barWidth - 24) / TABS.length : 0;
+  const canUseLiquidGlass = Platform.OS === 'ios' && isGlassEffectAPIAvailable();
 
   useEffect(() => {
     const activeIndex = Math.max(TABS.indexOf(route.name), 0);
@@ -118,8 +120,19 @@ const MenuBar = () => {
   return (
     <View style={styles.menuShell} pointerEvents="box-none" {...panResponder.panHandlers}>
       <BlurView intensity={Platform.OS === 'ios' ? 55 : 35} tint="dark" style={styles.menuBar}>
+        {canUseLiquidGlass ? (
+          <GlassView
+            pointerEvents="none"
+            glassEffectStyle="clear"
+            colorScheme="dark"
+            isInteractive
+            style={styles.nativeGlassLayer}
+          />
+        ) : null}
         <LinearGradient
-          colors={['rgba(236,218,255,0.32)', 'rgba(124,58,237,0.22)', 'rgba(37,20,54,0.66)']}
+          colors={canUseLiquidGlass
+            ? ['rgba(255,255,255,0.18)', 'rgba(124,58,237,0.10)', 'rgba(8,8,12,0.18)']
+            : ['rgba(236,218,255,0.32)', 'rgba(124,58,237,0.22)', 'rgba(37,20,54,0.66)']}
           locations={[0, 0.52, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -217,6 +230,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(224,197,255,0.32)',
     backgroundColor: 'rgba(28,20,38,0.58)',
+  },
+  nativeGlassLayer: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 36,
   },
   glassOverlay: {
     flex: 1,
