@@ -525,6 +525,9 @@ export default function HomeScreen({ navigation }) {
           ) : (
             <Text style={styles.emptySectionText}>No hay calificaciones aún.</Text>
           )}
+          <TouchableOpacity style={styles.seeMoreButton} onPress={() => navigation.navigate('ChartsScreen')}>
+            <Text style={styles.seeMoreText}>See all charts →</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Activity Feed */}
@@ -572,6 +575,9 @@ export default function HomeScreen({ navigation }) {
           ) : (
             <Text style={styles.emptySectionText}>No hay actividad reciente.</Text>
           )}
+          <TouchableOpacity style={styles.seeMoreButton} onPress={() => navigation.navigate('ActivityScreen')}>
+            <Text style={styles.seeMoreText}>See all activity →</Text>
+          </TouchableOpacity>
         </View>
       </Animated.ScrollView>
     </SafeAreaView>
@@ -882,5 +888,19 @@ const styles = StyleSheet.create({
   activityTimestamp: {
     color: '#888',
     fontSize: 11,
+  },
+  seeMoreButton: {
+    alignSelf: 'flex-start',
+    marginTop: 12,
+    marginLeft: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: 'rgba(160, 113, 202, 0.15)',
+  },
+  seeMoreText: {
+    color: '#A071CA',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
