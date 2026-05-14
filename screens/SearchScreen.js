@@ -76,16 +76,17 @@ export default function SearchScreen({ navigation }) {
   const isLoading = searchQueryResult.isFetching && Boolean(normalizedQuery);
   const error = searchQueryResult.isError ? getApiErrorMessage(searchQueryResult.error, 'No se pudieron cargar los resultados.') : null;
   const hasResults = searchResults.length > 0;
+  const hasActiveSearch = searchQuery.trim().length > 0;
 
   useEffect(() => {
     Animated.spring(resultsAnim, {
-      toValue: hasResults ? 1 : 0,
+      toValue: hasActiveSearch ? 1 : 0,
       useNativeDriver: true,
       stiffness: 130,
       damping: 18,
       mass: 0.9,
     }).start();
-  }, [hasResults, resultsAnim]);
+  }, [hasActiveSearch, resultsAnim]);
 
   const handleSearchChange = (text) => {
     setSearchQuery(text);
@@ -206,7 +207,7 @@ export default function SearchScreen({ navigation }) {
       <Animated.View
         style={[
           styles.searchSection,
-          !hasResults && styles.searchSectionCentered,
+          !hasActiveSearch && styles.searchSectionCentered,
           {
             transform: [
               {
@@ -275,7 +276,7 @@ export default function SearchScreen({ navigation }) {
         </View>
       )}
 
-      {!isLoading && searchResults.length === 0 && searchQuery.trim() !== '' && (
+      {!isLoading && searchResults.length === 0 && normalizedQuery !== '' && (
         <View style={styles.noResultsContainer}>
           <Text style={styles.noResultsText}>No se encontraron resultados.</Text>
         </View>
