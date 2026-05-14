@@ -4,26 +4,38 @@ import { Image } from 'expo-image';
 
 const SpinningDisc = ({ source, size = 56, isPlaying = false }) => {
   const rotation = useRef(new Animated.Value(0)).current;
+  const animationRef = useRef(null);
+  const wasPlayingRef = useRef(false);
 
   useEffect(() => {
-    let animation;
-    if (isPlaying) {
-      animation = Animated.loop(
+    if (isPlaying && !wasPlayingRef.current) {
+      // Empezar a girar solo si antes no estaba girando
+      animationRef.current = Animated.loop(
         Animated.timing(rotation, {
           toValue: 1,
           duration: 4000,
           useNativeDriver: true,
         })
       );
-      animation.start();
-    } else {
-      rotation.stopAnimation();
+      animationRef.current.start();
+      wasPlayingRef.current = true;
+    } else if (!isPlaying && wasPlayingRef.current) {
+      // Detener solo si antes estaba girando
+      if (animationRef.current) {
+        animationRef.current.stop();
+        animationRef.current = null;
+      }
       rotation.setValue(0);
+      wasPlayingRef.current = false;
     }
+
     return () => {
-      if (animation) animation.stop();
+      if (animationRef.current) {
+        animationRef.current.stop();
+      }
     };
-  }, [isPlaying, rotation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying]);
 
   const spin = rotation.interpolate({
     inputRange: [0, 1],
