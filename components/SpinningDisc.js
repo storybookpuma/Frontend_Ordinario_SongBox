@@ -30,6 +30,9 @@ const SpinningDisc = ({ source, size = 56, isPlaying = false }) => {
     outputRange: ['0deg', '360deg'],
   });
 
+  const holeSize = size * 0.2;
+  const holeRadius = holeSize / 2;
+
   return (
     <View style={[styles.container, { width: size, height: size }]}>
       <Animated.View
@@ -43,23 +46,23 @@ const SpinningDisc = ({ source, size = 56, isPlaying = false }) => {
           },
         ]}
       >
-        <Image
-          source={source}
-          style={[styles.image, { width: size, height: size, borderRadius: size / 2 }]}
-          contentFit="cover"
-          cachePolicy="memory-disk"
-        />
+        <View style={styles.imageWrap}>
+          <Image
+            source={source}
+            style={{ width: size, height: size }}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
+        </View>
         <View
           style={[
             styles.centerHole,
             {
-              width: size * 0.22,
-              height: size * 0.22,
-              borderRadius: size * 0.11,
-              top: '50%',
-              left: '50%',
-              marginTop: -(size * 0.11),
-              marginLeft: -(size * 0.11),
+              width: holeSize,
+              height: holeSize,
+              borderRadius: holeRadius,
+              top: (size - holeSize) / 2,
+              left: (size - holeSize) / 2,
             },
           ]}
         />
@@ -83,14 +86,15 @@ const styles = StyleSheet.create({
     elevation: 5,
     overflow: 'hidden',
   },
-  image: {
+  imageWrap: {
     ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
   },
   centerHole: {
     position: 'absolute',
     backgroundColor: '#171515',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
 });
 
