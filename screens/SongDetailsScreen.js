@@ -343,6 +343,7 @@ export default function SongDetailsScreen({ route }) {
                 currentRating={userRating}
                 onRatingChange={handleRatingChange}
                 editable={Boolean(user)}
+                isLoading={userRatingQuery.isMutating}
               />
               {userRating > 0 && (
                 <TouchableOpacity onPress={() => handleRatingChange(0)} disabled={userRatingQuery.isMutating}>

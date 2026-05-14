@@ -10,6 +10,8 @@ export const useRating = ({ entityType, entityId, enabled = true }) => {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const queryKey = queryKeys.userRating(entityType, entityId);
+  const detailsQueryKey = queryKeys[entityType === 'song' ? 'songDetails' : entityType === 'album' ? 'albumDetails' : 'artistDetails'](entityId);
+  const chartsQueryKey = queryKeys.charts(entityType, 20);
 
   const query = useQuery({
     queryKey,
@@ -24,13 +26,15 @@ export const useRating = ({ entityType, entityId, enabled = true }) => {
 
   const invalidateRelated = () => {
     queryClient.invalidateQueries({ queryKey });
-    queryClient.invalidateQueries({ queryKey: queryKeys[entityType === 'song' ? 'songDetails' : entityType === 'album' ? 'albumDetails' : 'artistDetails'](entityId) });
+    queryClient.invalidateQueries({ queryKey: detailsQueryKey });
+    queryClient.invalidateQueries({ queryKey: chartsQueryKey });
+    queryClient.invalidateQueries({ queryKey: queryKeys.activity(20) });
   };
 
   const createMutation = useMutation({
     mutationFn: (rating) => axiosInstance.post('/rate_entity', { entityType, entityId, rating }),
-    onSuccess: (response) => {
-      queryClient.setQueryData(queryKey, response.data.rating);
+    onSuccess: (_response, rating) => {
+      queryClient.setQueryData(queryKey, rating);
       invalidateRelated();
       showToast('Tu calificación ha sido registrada.');
     },
@@ -41,8 +45,8 @@ export const useRating = ({ entityType, entityId, enabled = true }) => {
 
   const updateMutation = useMutation({
     mutationFn: (rating) => axiosInstance.put('/rate_entity', { entityType, entityId, rating }),
-    onSuccess: (response) => {
-      queryClient.setQueryData(queryKey, response.data.rating);
+    onSuccess: (_response, rating) => {
+      queryClient.setQueryData(queryKey, rating);
       invalidateRelated();
       showToast('Tu calificación ha sido actualizada.');
     },

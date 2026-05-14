@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
 import LoadingScreen from '../components/LoadingScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SkeletonCard } from '../components/Skeleton';
+import { SkeletonCard, SkeletonList } from '../components/Skeleton';
 import { normalizeAlbum, normalizeArtist, normalizeSong } from '../utils/normalizers';
 import { queryKeys } from '../api/queryKeys';
 import { useCharts } from '../hooks/useCharts';
@@ -488,7 +488,7 @@ export default function HomeScreen({ navigation }) {
 
         {/* Top Rated Charts */}
         <View style={styles.extraSection}>
-          <Text style={styles.sectionTitle}>Top Rated Songs</Text>
+          <Text style={styles.sectionTitle}>Top Rated</Text>
           {chartsQuery.isLoading ? (
             renderCardSkeletonRow()
           ) : chartsQuery.data?.length > 0 ? (
@@ -503,9 +503,22 @@ export default function HomeScreen({ navigation }) {
                     }
                   }}
                 >
-                  <Text style={styles.chartRank}>#{index + 1}</Text>
-                  <Text style={styles.chartRating}>{item.averageRating?.toFixed(1)} ★</Text>
-                  <Text style={styles.chartCount}>{item.ratingCount} votes</Text>
+                  {item.image ? (
+                    <Image source={{ uri: item.image }} style={styles.chartImage} contentFit="cover" cachePolicy="memory-disk" />
+                  ) : (
+                    <View style={[styles.chartImage, { backgroundColor: '#2A2A2A', alignItems: 'center', justifyContent: 'center' }]}>
+                      <Text style={styles.chartRankSmall}>#{index + 1}</Text>
+                    </View>
+                  )}
+                  <Text style={styles.chartName} numberOfLines={1}>{item.name || item.entityId}</Text>
+                  {item.artist ? (
+                    <Text style={styles.chartArtist} numberOfLines={1}>{item.artist}</Text>
+                  ) : null}
+                  <View style={styles.chartRatingRow}>
+                    <Text style={styles.chartRatingValue}>{item.averageRating?.toFixed(1)}</Text>
+                    <Text style={styles.chartRatingStar}> ★</Text>
+                    <Text style={styles.chartCountValue}> ({item.ratingCount})</Text>
+                  </View>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -518,23 +531,42 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.extraSection}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
           {activityQuery.isLoading ? (
-            renderCardSkeletonRow()
+            <SkeletonList count={3} itemStyle={styles.activitySkeletonItem} />
           ) : activityQuery.data?.length > 0 ? (
             <View style={styles.activityList}>
               {activityQuery.data.slice(0, 5).map((activity, index) => (
-                <View key={`activity-${index}`} style={styles.activityItem}>
-                  <Text style={styles.activityUsername}>{activity.username}</Text>
-                  <Text style={styles.activityText}>
-                    {activity.type === 'comment' && `commented on ${activity.entityType}: "${activity.text}"`}
-                    {activity.type === 'rating' && `rated ${activity.entityType} ${activity.rating}/10`}
-                    {activity.type === 'favorite' && `favorited ${activity.name || activity.entityType}`}
-                  </Text>
-                  {activity.timestamp && (
-                    <Text style={styles.activityTimestamp}>
-                      {new Date(activity.timestamp).toLocaleDateString()}
+                <TouchableOpacity
+                  key={`activity-${index}`}
+                  style={styles.activityItem}
+                  onPress={() => {
+                    if (activity.entityType === 'song' && activity.entityId) {
+                      navigation.navigate('SongDetailsScreen', { songId: activity.entityId });
+                    } else if (activity.entityType === 'album' && activity.entityId) {
+                      navigation.navigate('AlbumDetailsScreen', { album: { id: activity.entityId } });
+                    } else if (activity.entityType === 'artist' && activity.entityId) {
+                      navigation.navigate('ArtistDetailsScreen', { artistId: activity.entityId });
+                    } else if (activity.entityType === 'profile' && activity.entityId) {
+                      navigation.navigate('UserDetailsScreen', { profileId: activity.entityId });
+                    }
+                  }}
+                >
+                  <View style={styles.activityHeader}>
+                    <Text style={styles.activityIcon}>
+                      {activity.type === 'comment' ? '💬' : activity.type === 'rating' ? '⭐' : '❤️'}
                     </Text>
-                  )}
-                </View>
+                    <Text style={styles.activityUsername}>{activity.username}</Text>
+                    {activity.timestamp && (
+                      <Text style={styles.activityTimestamp}>
+                        {new Date(activity.timestamp).toLocaleDateString()}
+                      </Text>
+                    )}
+                  </View>
+                  <Text style={styles.activityText}>
+                    {activity.type === 'comment' && `Commented: "${activity.text}"`}
+                    {activity.type === 'rating' && `Rated ${activity.entityType} ${activity.rating}/10`}
+                    {activity.type === 'favorite' && `Favorited ${activity.name || activity.entityType}`}
+                  </Text>
+                </TouchableOpacity>
               ))}
             </View>
           ) : (
@@ -764,57 +796,91 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
   },
   chartCard: {
-    width: 120,
-    height: 120,
+    width: 150,
     marginRight: 14,
     borderRadius: 20,
-    backgroundColor: 'rgba(160, 113, 202, 0.15)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(160, 113, 202, 0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: 'rgba(255,255,255,0.08)',
     padding: 10,
+    overflow: 'hidden',
   },
-  chartRank: {
+  chartImage: {
+    width: '100%',
+    height: 130,
+    borderRadius: 14,
+    marginBottom: 8,
+  },
+  chartRankSmall: {
     color: '#A071CA',
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: 'bold',
   },
-  chartRating: {
-    color: '#FFD700',
-    fontSize: 16,
-    fontWeight: 'bold',
+  chartName: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 17,
+  },
+  chartArtist: {
+    color: '#D9D0E7',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  chartRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 6,
   },
-  chartCount: {
+  chartRatingValue: {
+    color: '#FFD700',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  chartRatingStar: {
+    color: '#FFD700',
+    fontSize: 12,
+  },
+  chartCountValue: {
     color: '#B9B0C7',
     fontSize: 12,
-    marginTop: 4,
   },
   activityList: {
     paddingHorizontal: 20,
     gap: 10,
   },
+  activitySkeletonItem: {
+    marginBottom: 8,
+    height: 60,
+  },
   activityItem: {
     backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 12,
     marginBottom: 8,
+  },
+  activityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  activityIcon: {
+    fontSize: 16,
   },
   activityUsername: {
     color: '#A071CA',
     fontWeight: 'bold',
     fontSize: 14,
+    flex: 1,
   },
   activityText: {
     color: '#FFF',
     fontSize: 13,
-    marginTop: 4,
+    marginTop: 6,
     lineHeight: 18,
   },
   activityTimestamp: {
     color: '#888',
     fontSize: 11,
-    marginTop: 6,
   },
 });

@@ -9,9 +9,11 @@ import {
   Platform,
   TextInput,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import * as ImagePicker from 'expo-image-picker';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import CommentSection from '../components/CommentSection';
 import { AuthContext } from '../context/AuthContext';
@@ -32,6 +34,7 @@ export default function ProfileScreen({ navigation }) {
   const [newUsername, setNewUsername] = useState(user?.username || '');
 
   const [newComment, setNewComment] = useState('');
+  const [isUploadingPicture, setIsUploadingPicture] = useState(false);
 
   const entityType = "profile";
   const entityId = getUserId(user);
@@ -108,6 +111,49 @@ export default function ProfileScreen({ navigation }) {
       showToast('No se pudo actualizar tu nombre de usuario.');
     }
   };
+
+  const handlePickProfilePicture = useCallback(async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        showToast('Se necesita permiso para acceder a la galería.');
+        return;
+      }
+
+      const pickerResult = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (pickerResult.canceled || !pickerResult.assets || pickerResult.assets.length === 0) {
+        return;
+      }
+
+      const asset = pickerResult.assets[0];
+      setIsUploadingPicture(true);
+
+      const formData = new FormData();
+      formData.append('profile_picture', {
+        uri: asset.uri,
+        name: 'profile_picture.jpg',
+        type: 'image/jpeg',
+      });
+
+      const response = await axiosInstance.post('/update_profile_picture', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      setUser({ ...user, profile_picture: response.data.profile_picture });
+      showToast('Foto de perfil actualizada.');
+    } catch (error) {
+      console.error('Error al subir foto de perfil:', error);
+      showToast('No se pudo actualizar la foto de perfil.');
+    } finally {
+      setIsUploadingPicture(false);
+    }
+  }, [axiosInstance, showToast, setUser, user]);
 
   const postCommentMutation = useMutation({
     mutationFn: (commentText) => axiosInstance.post(`/profile/${entityId}/comments`, {
@@ -248,14 +294,20 @@ export default function ProfileScreen({ navigation }) {
     <>
       <View style={styles.topRectangle}>
         <View style={styles.profileInfoContainer}>
-          <TouchableOpacity style={styles.profileImageContainer}>
+          <TouchableOpacity style={styles.profileImageContainer} onPress={handlePickProfilePicture} disabled={isUploadingPicture}>
             <Image 
               source={profileImageSource} 
               style={styles.profileImage}
             />
-            <View style={styles.editIconContainer}>
-              <Icon name="pencil" size={20} color="#fff" />
-            </View>
+            {isUploadingPicture ? (
+              <View style={styles.editIconContainer}>
+                <ActivityIndicator size="small" color="#fff" />
+              </View>
+            ) : (
+              <View style={styles.editIconContainer}>
+                <Icon name="pencil" size={20} color="#fff" />
+              </View>
+            )}
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setIsEditingUsername(true)}>
             <Text style={styles.userName}>{user?.username || ''}</Text>
@@ -281,7 +333,7 @@ export default function ProfileScreen({ navigation }) {
 
       <Text style={styles.songsTitle}>My Favorite Songs</Text>      
     </>
-  ), [favoriteAlbums, favoriteArtists, isLoadingFavorites, profileImageSource, renderAlbumItem, renderArtistItem, setIsEditingUsername, user?.username]);
+  ), [favoriteAlbums, favoriteArtists, isLoadingFavorites, profileImageSource, renderAlbumItem, renderArtistItem, setIsEditingUsername, user?.username, handlePickProfilePicture, isUploadingPicture]);
 
   const followingSection = useMemo(() => (
     <FollowingSection
