@@ -252,29 +252,19 @@ export default function ProfileScreen({ navigation }) {
     </TouchableOpacity>
   ), [navigation]);
 
-  const renderSongItem = useCallback(({ item }) => {
-    const isNowPlaying = currentlyPlaying?.is_playing && currentlyPlaying?.item?.id === item.entityId;
-    return (
-      <TouchableOpacity
-        style={styles.songItem}
-        onPress={() => {
-          navigation.navigate('SongDetailsScreen', { songId: item.entityId });
-        }}
-      >
-        <Image source={{ uri: item.image }} style={styles.songImage} />
-        <View style={styles.songInfo}>
-          <Text style={styles.songTitle}>{item.name}</Text>
-        </View>
-        {isNowPlaying && (
-          <SpinningDisc
-            source={{ uri: item.image }}
-            size={52}
-            isPlaying={true}
-          />
-        )}
-      </TouchableOpacity>
-    );
-  }, [navigation, currentlyPlaying]);
+  const renderSongItem = useCallback(({ item }) => (
+    <TouchableOpacity
+      style={styles.songItem}
+      onPress={() => {
+        navigation.navigate('SongDetailsScreen', { songId: item.entityId });
+      }}
+    >
+      <Image source={{ uri: item.image }} style={styles.songImage} />
+      <View style={styles.songInfo}>
+        <Text style={styles.songTitle}>{item.name}</Text>
+      </View>
+    </TouchableOpacity>
+  ), [navigation]);
 
   const renderArtistItem = useCallback(({ item }) => (
     <TouchableOpacity 
@@ -395,11 +385,18 @@ export default function ProfileScreen({ navigation }) {
             }]
           }
         ]}>
-          <Image 
-            source={profileImageSource} 
+          <Image
+            source={profileImageSource}
             style={styles.stickyProfileImage}
           />
           <Text style={styles.stickyUserName}>{user?.username || ''}</Text>
+          {currentlyPlaying?.is_playing && currentlyPlaying?.item?.cover_image && (
+            <SpinningDisc
+              source={{ uri: currentlyPlaying.item.cover_image }}
+              size={36}
+              isPlaying={true}
+            />
+          )}
         </Animated.View>
 
         <Animated.FlatList
