@@ -121,6 +121,61 @@ const MenuBar = () => {
     outputRange: [0.22, 0.5],
   });
 
+  const getReflectionBlobStyle = (blobIndex) => {
+    const inputRange = [0, 1, 2];
+    const translateXStops = [
+      [-itemWidth * 0.35, itemWidth * 0.28, itemWidth * 1.25],
+      [itemWidth * 0.2, itemWidth * 0.92, itemWidth * 1.65],
+      [itemWidth * 1.85, itemWidth * 1.18, itemWidth * 0.52],
+    ];
+    const translateYStops = [
+      [2, -10, 6],
+      [-8, 4, -6],
+      [8, -4, -10],
+    ];
+    const scaleStops = [
+      [1.15, 0.92, 0.72],
+      [0.86, 1.18, 0.96],
+      [0.72, 0.92, 1.2],
+    ];
+    const opacityStops = [
+      [0.54, 0.4, 0.26],
+      [0.36, 0.56, 0.42],
+      [0.25, 0.42, 0.58],
+    ];
+
+    return {
+      opacity: activeIndexAnim.interpolate({
+        inputRange,
+        outputRange: opacityStops[blobIndex],
+        extrapolate: 'clamp',
+      }),
+      transform: [
+        {
+          translateX: activeIndexAnim.interpolate({
+            inputRange,
+            outputRange: translateXStops[blobIndex],
+            extrapolate: 'clamp',
+          }),
+        },
+        {
+          translateY: activeIndexAnim.interpolate({
+            inputRange,
+            outputRange: translateYStops[blobIndex],
+            extrapolate: 'clamp',
+          }),
+        },
+        {
+          scale: activeIndexAnim.interpolate({
+            inputRange,
+            outputRange: scaleStops[blobIndex],
+            extrapolate: 'clamp',
+          }),
+        },
+      ],
+    };
+  };
+
   const getTabAnimatedStyle = (tabIndex) => {
     const inputRange = TABS.map((_, index) => index);
     return {
@@ -171,6 +226,25 @@ const MenuBar = () => {
           onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
           {...panResponder.panHandlers}
         >
+          {itemWidth > 0 ? (
+            <View pointerEvents="none" style={styles.colorReflectionLayer}>
+              <Animated.View style={[styles.reflectionBlob, styles.reflectionBlobHome, getReflectionBlobStyle(0)]} />
+              <Animated.View style={[styles.reflectionBlob, styles.reflectionBlobSearch, getReflectionBlobStyle(1)]} />
+              <Animated.View style={[styles.reflectionBlob, styles.reflectionBlobProfile, getReflectionBlobStyle(2)]} />
+              <Animated.View
+                style={[
+                  styles.reflectionWake,
+                  {
+                    width: itemWidth * 1.22,
+                    transform: [
+                      { translateX: activeTranslateX },
+                      { scaleX: thumbScaleX },
+                    ],
+                  },
+                ]}
+              />
+            </View>
+          ) : null}
           {itemWidth > 0 ? (
             <Animated.View
               pointerEvents="none"
@@ -272,6 +346,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     position: 'relative',
+  },
+  colorReflectionLayer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  reflectionBlob: {
+    position: 'absolute',
+    top: -20,
+    width: 138,
+    height: 116,
+    borderRadius: 70,
+  },
+  reflectionBlobHome: {
+    left: 0,
+    backgroundColor: 'rgba(255,54,94,0.76)',
+  },
+  reflectionBlobSearch: {
+    left: 0,
+    backgroundColor: 'rgba(180,90,255,0.72)',
+  },
+  reflectionBlobProfile: {
+    left: 0,
+    backgroundColor: 'rgba(255,186,63,0.56)',
+  },
+  reflectionWake: {
+    position: 'absolute',
+    left: 8,
+    top: 7,
+    bottom: 7,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.14)',
   },
   liquidThumb: {
     position: 'absolute',
