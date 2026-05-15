@@ -10,10 +10,12 @@ import {
   TextInput,
   Modal,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import * as ImagePicker from 'expo-image-picker';
+import { useIsFocused } from '@react-navigation/native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import CommentSection from '../components/CommentSection';
 import SpinningDisc from '../components/SpinningDisc';
@@ -30,6 +32,7 @@ export default function ProfileScreen({ navigation }) {
   const { user, isLoading, axiosInstance, logout, setUser } = useContext(AuthContext);
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const isFocused = useIsFocused();
   const [comments, setComments] = useState([]);
   const [isRefreshingUser, setIsRefreshingUser] = useState(false);
 
@@ -81,7 +84,7 @@ export default function ProfileScreen({ navigation }) {
     },
   });
 
-  const { data: currentlyPlaying } = useSpotifyPlayback();
+  const { data: currentlyPlaying } = useSpotifyPlayback({ enabled: isFocused });
 
   const {
     data: followingUsers = [],
@@ -107,6 +110,16 @@ export default function ProfileScreen({ navigation }) {
       showToast('No se pudo compartir la captura del perfil.');
     }
   }, [showToast, user?.username]);
+
+  const handleOpenCurrentTrack = useCallback(async () => {
+    const url = currentlyPlaying?.item?.url;
+    if (!url) return;
+    try {
+      await Linking.openURL(url);
+    } catch (_error) {
+      showToast('No se pudo abrir Spotify.');
+    }
+  }, [currentlyPlaying?.item?.url, showToast]);
 
   const handleSaveUsername = async () => {
     if (!newUsername.trim()) {
@@ -305,7 +318,7 @@ export default function ProfileScreen({ navigation }) {
 
   const listHeader = useMemo(() => (
     <>
-      <View ref={profileCaptureRef} collapsable={false} style={styles.topRectangle}>
+      <View style={styles.topRectangle}>
         <View style={styles.profileInfoContainer}>
           <TouchableOpacity style={styles.profileImageContainer} onPress={handlePickProfilePicture} disabled={isUploadingPicture}>
             <Image 
@@ -390,6 +403,16 @@ export default function ProfileScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
+        <View ref={profileCaptureRef} collapsable={false} style={styles.profileShareCaptureWrap}>
+          <ProfileShareCard
+            username={user?.username || 'SongBox listener'}
+            profileImageSource={profileImageSource}
+            favoriteAlbums={favoriteAlbums.length}
+            favoriteArtists={favoriteArtists.length}
+            favoriteSongs={favoriteSongs.length}
+            following={followingIds.length}
+          />
+        </View>
         <TouchableOpacity 
           style={styles.logoutButton} 
           onPress={logout}
@@ -422,11 +445,13 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.stickyUserName}>{user?.username || ''}</Text>
           </View>
           {currentlyPlaying?.is_playing && currentlyPlaying?.item?.cover_image && (
-            <SpinningDisc
-              source={{ uri: currentlyPlaying.item.cover_image }}
-              size={36}
-              isPlaying={true}
-            />
+            <TouchableOpacity onPress={handleOpenCurrentTrack} activeOpacity={0.8}>
+              <SpinningDisc
+                source={{ uri: currentlyPlaying.item.cover_image }}
+                size={36}
+                isPlaying={true}
+              />
+            </TouchableOpacity>
           )}
         </Animated.View>
 
@@ -558,10 +583,155 @@ const FollowingSection = React.memo(function FollowingSection({ followingCount, 
   );
 });
 
+const ProfileShareCard = React.memo(function ProfileShareCard({
+  username,
+  profileImageSource,
+  favoriteAlbums,
+  favoriteArtists,
+  favoriteSongs,
+  following,
+}) {
+  return (
+    <View style={styles.profileShareCard}>
+      <View style={styles.profileShareAura} />
+      <Text style={styles.profileShareKicker}>SongBox Profile</Text>
+      <View style={styles.profileShareIdentity}>
+        <Image source={profileImageSource} style={styles.profileShareImage} contentFit="cover" />
+        <View style={styles.profileShareNameBlock}>
+          <Text style={styles.profileShareName} numberOfLines={1}>{username}</Text>
+          <Text style={styles.profileShareSubtitle}>music taste archive</Text>
+        </View>
+      </View>
+      <View style={styles.profileShareStats}>
+        <ProfileShareStat label="Albums" value={favoriteAlbums} />
+        <ProfileShareStat label="Artists" value={favoriteArtists} />
+        <ProfileShareStat label="Songs" value={favoriteSongs} />
+        <ProfileShareStat label="Following" value={following} />
+      </View>
+      <View style={styles.profileShareFooter}>
+        <Text style={styles.profileShareFooterText}>Made with SongBox</Text>
+        <View style={styles.profileShareMark} />
+      </View>
+    </View>
+  );
+});
+
+const ProfileShareStat = ({ label, value }) => (
+  <View style={styles.profileShareStat}>
+    <Text style={styles.profileShareStatValue}>{value}</Text>
+    <Text style={styles.profileShareStatLabel}>{label}</Text>
+  </View>
+);
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#171515',
+  },
+  profileShareCaptureWrap: {
+    position: 'absolute',
+    left: -5000,
+    top: 0,
+    width: 360,
+    zIndex: -1,
+  },
+  profileShareCard: {
+    width: 360,
+    minHeight: 520,
+    padding: 24,
+    borderRadius: 36,
+    backgroundColor: '#201B27',
+    overflow: 'hidden',
+  },
+  profileShareAura: {
+    position: 'absolute',
+    right: -72,
+    top: -72,
+    width: 210,
+    height: 210,
+    borderRadius: 105,
+    backgroundColor: 'rgba(244,231,197,0.22)',
+  },
+  profileShareKicker: {
+    color: '#F4E7C5',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  profileShareIdentity: {
+    alignItems: 'center',
+    marginTop: 36,
+  },
+  profileShareImage: {
+    width: 132,
+    height: 132,
+    borderRadius: 66,
+    borderWidth: 3,
+    borderColor: 'rgba(244,231,197,0.65)',
+  },
+  profileShareNameBlock: {
+    alignItems: 'center',
+    marginTop: 18,
+  },
+  profileShareName: {
+    color: '#FFF',
+    fontSize: 32,
+    fontWeight: '900',
+    maxWidth: 290,
+  },
+  profileShareSubtitle: {
+    color: '#BBA7FF',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    marginTop: 4,
+    textTransform: 'uppercase',
+  },
+  profileShareStats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 34,
+  },
+  profileShareStat: {
+    width: '48%',
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  profileShareStatValue: {
+    color: '#FFD166',
+    fontSize: 26,
+    fontWeight: '900',
+  },
+  profileShareStatLabel: {
+    color: '#D8D0E4',
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  profileShareFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 36,
+  },
+  profileShareFooterText: {
+    color: '#766E81',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  profileShareMark: {
+    width: 34,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#F4E7C5',
   },
   listContainer: {
     paddingBottom: 150,

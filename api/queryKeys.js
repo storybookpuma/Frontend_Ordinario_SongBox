@@ -13,4 +13,5 @@ export const queryKeys = {
   activity: (limit, scope = 'personalized') => ['activity', scope, limit],
   spotifyCurrentlyPlaying: ['spotifyCurrentlyPlaying'],
   monthlyWrapped: (month) => ['monthlyWrapped', month || 'current'],
+  profileCompatibility: (profileId) => ['profileCompatibility', profileId],
 };

@@ -51,6 +51,8 @@ export default function WrappedScreen({ navigation }) {
   const favoritesByType = data?.favoritesByType || {};
   const hasActivity = summary.ratingsCount > 0 || summary.favoritesCount > 0;
   const canGoForward = selectedMonth < currentMonth;
+  const topRatedItem = data?.topRated?.[0];
+  const topArtist = data?.topArtists?.[0];
 
   const handleShare = async () => {
     if (!data || isError) return;
@@ -119,12 +121,32 @@ export default function WrappedScreen({ navigation }) {
           </View>
 
           {!isError && hasActivity ? (
-            <View style={styles.captureStatsGrid}>
-              <StatCard label="Ratings" value={summary.ratingsCount || 0} accent="#FFD166" />
-              <StatCard label="Avg score" value={(summary.averageRating || 0).toFixed(1)} accent="#BBA7FF" />
-              <StatCard label="Favorites" value={summary.favoritesCount || 0} accent="#7AE7C7" />
-              <StatCard label="New saves" value={summary.newFavoritesCount || 0} accent="#FF8FAB" />
-            </View>
+            <>
+              <View style={styles.posterFeature}>
+                {topRatedItem?.image ? (
+                  <Image source={{ uri: topRatedItem.image }} style={styles.posterImage} contentFit="cover" cachePolicy="memory-disk" />
+                ) : (
+                  <View style={styles.posterImageFallback} />
+                )}
+                <View style={styles.posterFeatureText}>
+                  <Text style={styles.posterLabel}>Highest rated</Text>
+                  <Text style={styles.posterName} numberOfLines={2}>{topRatedItem?.name || 'No top pick yet'}</Text>
+                  <Text style={styles.posterMeta} numberOfLines={1}>
+                    {topRatedItem?.artist || getTypeLabel(topRatedItem?.entityType)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.posterRibbon}>
+                <Text style={styles.posterRibbonLabel}>Artist orbit</Text>
+                <Text style={styles.posterRibbonValue} numberOfLines={1}>{topArtist?.name || 'Keep rating to unlock'}</Text>
+              </View>
+              <View style={styles.captureStatsGrid}>
+                <StatCard label="Ratings" value={summary.ratingsCount || 0} accent="#FFD166" />
+                <StatCard label="Avg score" value={(summary.averageRating || 0).toFixed(1)} accent="#BBA7FF" />
+                <StatCard label="Favorites" value={summary.favoritesCount || 0} accent="#7AE7C7" />
+                <StatCard label="New saves" value={summary.newFavoritesCount || 0} accent="#FF8FAB" />
+              </View>
+            </>
           ) : null}
 
           <Text style={styles.captureBrand}>Made with SongBox</Text>
@@ -302,6 +324,70 @@ const styles = StyleSheet.create({
     padding: 0,
     backgroundColor: '#171515',
     borderRadius: 34,
+  },
+  posterFeature: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 24,
+    backgroundColor: '#F4E7C5',
+  },
+  posterImage: {
+    width: 86,
+    height: 86,
+    borderRadius: 18,
+  },
+  posterImageFallback: {
+    width: 86,
+    height: 86,
+    borderRadius: 18,
+    backgroundColor: '#D0B889',
+  },
+  posterFeatureText: {
+    flex: 1,
+  },
+  posterLabel: {
+    color: '#5F4F31',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  posterName: {
+    color: '#171515',
+    fontSize: 22,
+    fontWeight: '900',
+    lineHeight: 24,
+    marginTop: 6,
+  },
+  posterMeta: {
+    color: '#5F4F31',
+    fontSize: 13,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  posterRibbon: {
+    marginTop: 12,
+    borderRadius: 20,
+    padding: 14,
+    backgroundColor: 'rgba(187,167,255,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(187,167,255,0.18)',
+  },
+  posterRibbonLabel: {
+    color: '#BBA7FF',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  posterRibbonValue: {
+    color: '#FFF',
+    fontSize: 19,
+    fontWeight: '900',
+    marginTop: 3,
   },
   heroCard: {
     minHeight: 250,

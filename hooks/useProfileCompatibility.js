@@ -3,18 +3,17 @@ import { useQuery } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
 import { queryKeys } from '../api/queryKeys';
 
-export function useSpotifyPlayback({ enabled = true } = {}) {
+export const useProfileCompatibility = (profileId) => {
   const { axiosInstance, user } = useContext(AuthContext);
 
   return useQuery({
-    queryKey: queryKeys.spotifyCurrentlyPlaying,
-    enabled: Boolean(enabled && axiosInstance && user),
+    queryKey: queryKeys.profileCompatibility(profileId),
+    enabled: Boolean(axiosInstance && user && profileId),
     queryFn: async () => {
-      const response = await axiosInstance.get('/spotify/currently_playing');
+      const response = await axiosInstance.get('/profile_compatibility', {
+        params: { profile_id: profileId },
+      });
       return response.data;
     },
-    refetchInterval: enabled ? 15000 : false,
-    retry: false,
-    staleTime: 10000,
   });
-}
+};

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useState, useEffect, useContext, useRef, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -12,16 +12,16 @@ import {
   TouchableWithoutFeedback
 } from 'react-native';
 import { Image } from 'expo-image';
-import Icon from 'react-native-vector-icons/FontAwesome';
 import MenuBar from '../components/MenuBar'; 
 import CommentSection from '../components/CommentSection';
 import { AuthContext } from '../context/AuthContext';
 import { DetailSkeleton } from '../components/Skeleton';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../api/queryKeys';
-import { splitFavorites } from '../utils/normalizers';
+import { resolveImageUrl, splitFavorites } from '../utils/normalizers';
 import { getApiErrorMessage } from '../utils/errors';
 import { useToast } from '../context/ToastContext';
+import { useProfileCompatibility } from '../hooks/useProfileCompatibility';
 
 export default function UserDetailsScreen({ route, navigation }) {
   const { profileId } = route.params;
@@ -52,6 +52,8 @@ export default function UserDetailsScreen({ route, navigation }) {
     },
   });
 
+  const { data: compatibility } = useProfileCompatibility(profileId);
+
   useEffect(() => {
     if (profileQuery.data) {
       setProfileData(profileQuery.data);
@@ -67,6 +69,10 @@ export default function UserDetailsScreen({ route, navigation }) {
     }
   }, [profileQuery.error, profileQuery.isError, showToast]);
 
+  const profileImageSource = useMemo(() => {
+    const resolved = resolveImageUrl(profileData?.profile_picture);
+    return resolved ? { uri: resolved } : require('../assets/default_picture.png');
+  }, [profileData?.profile_picture]);
   const { albums: favoriteAlbums, songs: favoriteSongs, artists: favoriteArtists } = splitFavorites(profileData?.favorites || []);
 
   const handleAddComment = (updatedComments) => {
@@ -163,8 +169,8 @@ export default function UserDetailsScreen({ route, navigation }) {
             }]
           }
         ]}>
-          <Image 
-            source={require('../assets/default_picture.png')} 
+          <Image
+            source={profileImageSource}
             style={styles.stickyProfileImage}
             contentFit="cover"
           />
@@ -177,14 +183,11 @@ export default function UserDetailsScreen({ route, navigation }) {
               <View style={styles.topRectangle}>
                 <View style={styles.profileInfoContainer}>
                   <TouchableOpacity style={styles.profileImageContainer}>
-                    <Image 
-                      source={require('../assets/default_picture.png')} 
+                    <Image
+                      source={profileImageSource}
                       style={styles.profileImage}
                       contentFit="cover"
                     />
-                    <View style={styles.editIconContainer}>
-                      <Icon name="pencil" size={20} color="#fff" />
-                    </View>
                   </TouchableOpacity>
                   <TouchableOpacity>
                     <Text style={styles.userName}>{profileData.username || ''}</Text>
@@ -199,6 +202,49 @@ export default function UserDetailsScreen({ route, navigation }) {
                   )}
                 </View>
               </View>
+
+              <View style={styles.compatibilityCard}>
+                <View>
+                  <Text style={styles.compatibilityEyebrow}>Taste Match</Text>
+                  <Text style={styles.compatibilityScore}>{compatibility?.score ?? 0}%</Text>
+                </View>
+                <View style={styles.compatibilityMeta}>
+                  <Text style={styles.compatibilityText}>{compatibility?.sharedCount || 0} shared favorites</Text>
+                  <Text style={styles.compatibilityText} numberOfLines={1}>
+                    {compatibility?.topSharedArtists?.[0]?.name || 'Build overlap by saving more music'}
+                  </Text>
+                </View>
+              </View>
+
+              {compatibility?.sharedItems?.length ? (
+                <View style={styles.sharedStrip}>
+                  <Text style={styles.sharedTitle}>Shared favorites</Text>
+                  <FlatList
+                    data={compatibility.sharedItems}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    keyExtractor={(item) => `${item.entityType}-${item.entityId}`}
+                    contentContainerStyle={styles.sharedList}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.sharedItem}
+                        onPress={() => {
+                          if (item.entityType === 'song') navigation.navigate('SongDetailsScreen', { songId: item.entityId });
+                          if (item.entityType === 'album') navigation.navigate('AlbumDetailsScreen', { album: { id: item.entityId } });
+                          if (item.entityType === 'artist') navigation.navigate('ArtistDetailsScreen', { artistId: item.entityId });
+                        }}
+                      >
+                        {item.image ? (
+                          <Image source={{ uri: item.image }} style={styles.sharedImage} contentFit="cover" cachePolicy="memory-disk" />
+                        ) : (
+                          <View style={styles.sharedImage} />
+                        )}
+                        <Text style={styles.sharedName} numberOfLines={1}>{item.name}</Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                </View>
+              ) : null}
 
               {/* Álbumes favoritos */}
               <Text style={styles.albumsTitle}>User's Favorite Albums</Text>
@@ -392,6 +438,67 @@ const styles = StyleSheet.create({
   followButtonText: {
     color: '#fff',
     fontWeight: 'bold',
+  },
+  compatibilityCard: {
+    marginHorizontal: 15,
+    marginTop: 18,
+    padding: 18,
+    borderRadius: 26,
+    backgroundColor: '#F4E7C5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 18,
+  },
+  compatibilityEyebrow: {
+    color: '#5F4F31',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  compatibilityScore: {
+    color: '#171515',
+    fontSize: 42,
+    fontWeight: '900',
+    lineHeight: 46,
+  },
+  compatibilityMeta: {
+    flex: 1,
+  },
+  compatibilityText: {
+    color: '#4D4129',
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  sharedStrip: {
+    marginTop: 18,
+  },
+  sharedTitle: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '900',
+    marginLeft: 15,
+    marginBottom: 10,
+  },
+  sharedList: {
+    paddingHorizontal: 15,
+    gap: 10,
+  },
+  sharedItem: {
+    width: 94,
+  },
+  sharedImage: {
+    width: 94,
+    height: 94,
+    borderRadius: 18,
+    backgroundColor: '#2A2A2A',
+  },
+  sharedName: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 6,
   },
   albumsTitle: {
     fontSize: 24,
