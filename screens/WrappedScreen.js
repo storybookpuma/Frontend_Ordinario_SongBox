@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Share,
 } from 'react-native';
 import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/FontAwesome';
@@ -27,12 +28,42 @@ const getMonthLabel = (month) => {
 
 const getTypeLabel = (type) => TYPE_LABELS[type] || 'Music';
 
+const getCurrentMonth = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const shiftMonth = (month, amount) => {
+  const [year, monthIndex] = month.split('-').map(Number);
+  const date = new Date(year, monthIndex - 1 + amount, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+};
+
 export default function WrappedScreen({ navigation }) {
-  const { data, isLoading, isError } = useMonthlyWrapped();
+  const currentMonth = getCurrentMonth();
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const { data, isLoading, isError } = useMonthlyWrapped(selectedMonth);
   const summary = data?.summary || {};
   const ratingsByType = data?.ratingsByType || {};
   const favoritesByType = data?.favoritesByType || {};
   const hasActivity = summary.ratingsCount > 0 || summary.favoritesCount > 0;
+  const canGoForward = selectedMonth < currentMonth;
+
+  const handleShare = async () => {
+    if (!data || isError) return;
+
+    const topArtist = data.topArtists?.[0]?.name;
+    const topRated = data.topRated?.[0]?.name;
+    const message = [
+      `My SongBox Wrapped for ${getMonthLabel(data.month)}`,
+      `${summary.ratingsCount || 0} ratings · ${(summary.averageRating || 0).toFixed(1)} avg score`,
+      topArtist ? `Top artist orbit: ${topArtist}` : null,
+      topRated ? `Highest rated: ${topRated}` : null,
+      'Built with SongBox',
+    ].filter(Boolean).join('\n');
+
+    await Share.share({ message });
+  };
 
   const handleOpenItem = (item) => {
     if (item.entityType === 'song') {
@@ -51,15 +82,39 @@ export default function WrappedScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Icon name="chevron-left" size={18} color="#FFF" />
-        </TouchableOpacity>
+        <View style={styles.topBar}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Icon name="chevron-left" size={18} color="#FFF" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.shareButton, (!data || isError) && styles.disabledButton]}
+            onPress={handleShare}
+            disabled={!data || isError}
+          >
+            <Icon name="share-alt" size={16} color="#FFF" />
+            <Text style={styles.shareText}>Share</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.monthControls}>
+          <TouchableOpacity style={styles.monthButton} onPress={() => setSelectedMonth((month) => shiftMonth(month, -1))}>
+            <Icon name="angle-left" size={22} color="#FFF" />
+          </TouchableOpacity>
+          <Text style={styles.monthControlLabel}>{getMonthLabel(selectedMonth)}</Text>
+          <TouchableOpacity
+            style={[styles.monthButton, !canGoForward && styles.disabledButton]}
+            onPress={() => setSelectedMonth((month) => shiftMonth(month, 1))}
+            disabled={!canGoForward}
+          >
+            <Icon name="angle-right" size={22} color="#FFF" />
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.heroCard}>
           <View style={styles.heroGlow} />
           <Text style={styles.kicker}>SongBox Monthly</Text>
           <Text style={styles.title}>Your Month in Music</Text>
-          <Text style={styles.month}>{getMonthLabel(data?.month)}</Text>
+          <Text style={styles.month}>{getMonthLabel(data?.month || selectedMonth)}</Text>
           <View style={styles.heroDivider} />
           <Text style={styles.heroCopy}>
             A compact snapshot of what you rated, saved, and kept coming back to.
@@ -186,6 +241,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingBottom: 40,
   },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
   backButton: {
     width: 42,
     height: 42,
@@ -193,7 +254,47 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  shareButton: {
+    height: 42,
+    paddingHorizontal: 16,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  shareText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  disabledButton: {
+    opacity: 0.35,
+  },
+  monthControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 14,
+    padding: 6,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.055)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  monthButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthControlLabel: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '900',
   },
   heroCard: {
     minHeight: 250,
