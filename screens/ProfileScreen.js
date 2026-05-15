@@ -318,6 +318,20 @@ export default function ProfileScreen({ navigation }) {
         </View>
       </View>
 
+      <TouchableOpacity
+        style={styles.wrappedButton}
+        onPress={() => navigation.navigate('WrappedScreen')}
+        activeOpacity={0.86}
+      >
+        <View>
+          <Text style={styles.wrappedEyebrow}>Monthly Wrapped</Text>
+          <Text style={styles.wrappedTitle}>Your Month in Music</Text>
+        </View>
+        <View style={styles.wrappedIcon}>
+          <Icon name="bar-chart" size={17} color="#171515" />
+        </View>
+      </TouchableOpacity>
+
       <FavoriteCarouselSection
         title="My Favorite Albums"
         titleStyle={styles.albumsTitle}
@@ -336,7 +350,7 @@ export default function ProfileScreen({ navigation }) {
 
       <Text style={styles.songsTitle}>My Favorite Songs</Text>      
     </>
-  ), [favoriteAlbums, favoriteArtists, isLoadingFavorites, profileImageSource, renderAlbumItem, renderArtistItem, setIsEditingUsername, user?.username, handlePickProfilePicture, isUploadingPicture]);
+  ), [favoriteAlbums, favoriteArtists, isLoadingFavorites, profileImageSource, renderAlbumItem, renderArtistItem, setIsEditingUsername, user?.username, handlePickProfilePicture, isUploadingPicture, navigation]);
 
   const followingSection = useMemo(() => (
     <FollowingSection
@@ -576,6 +590,43 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
+  },
+  wrappedButton: {
+    marginHorizontal: 15,
+    marginTop: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    borderRadius: 24,
+    backgroundColor: '#F4E7C5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 5,
+  },
+  wrappedEyebrow: {
+    color: '#5F4F31',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  wrappedTitle: {
+    color: '#171515',
+    fontSize: 20,
+    fontWeight: '900',
+    marginTop: 3,
+  },
+  wrappedIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFD166',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   albumsTitle: {
     fontSize: 24,

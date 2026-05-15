@@ -72,6 +72,7 @@ const AppStack = () => {
         <Stack.Screen name="UserDetailsScreen" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="ChartsScreen" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="ActivityScreen" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="WrappedScreen" options={{ animation: 'slide_from_right' }} />
       </Stack>
     </>
   );

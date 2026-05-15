@@ -12,4 +12,5 @@ export const queryKeys = {
   charts: (entityType, limit) => ['charts', entityType, limit],
   activity: (limit, scope = 'personalized') => ['activity', scope, limit],
   spotifyCurrentlyPlaying: ['spotifyCurrentlyPlaying'],
+  monthlyWrapped: (month) => ['monthlyWrapped', month || 'current'],
 };
