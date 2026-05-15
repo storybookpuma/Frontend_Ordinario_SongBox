@@ -1,17 +1,18 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Share,
 } from 'react-native';
 import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMonthlyWrapped } from '../hooks/useMonthlyWrapped';
 import { DetailSkeleton } from '../components/Skeleton';
+import { useToast } from '../context/ToastContext';
+import { shareViewCapture } from '../utils/shareCapture';
 
 const TYPE_LABELS = {
   song: 'Songs',
@@ -42,6 +43,8 @@ const shiftMonth = (month, amount) => {
 export default function WrappedScreen({ navigation }) {
   const currentMonth = getCurrentMonth();
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const shareCardRef = useRef(null);
+  const { showToast } = useToast();
   const { data, isLoading, isError } = useMonthlyWrapped(selectedMonth);
   const summary = data?.summary || {};
   const ratingsByType = data?.ratingsByType || {};
@@ -51,18 +54,11 @@ export default function WrappedScreen({ navigation }) {
 
   const handleShare = async () => {
     if (!data || isError) return;
-
-    const topArtist = data.topArtists?.[0]?.name;
-    const topRated = data.topRated?.[0]?.name;
-    const message = [
-      `My SongBox Wrapped for ${getMonthLabel(data.month)}`,
-      `${summary.ratingsCount || 0} ratings · ${(summary.averageRating || 0).toFixed(1)} avg score`,
-      topArtist ? `Top artist orbit: ${topArtist}` : null,
-      topRated ? `Highest rated: ${topRated}` : null,
-      'Built with SongBox',
-    ].filter(Boolean).join('\n');
-
-    await Share.share({ message });
+    try {
+      await shareViewCapture(shareCardRef, `songbox-wrapped-${data.month || selectedMonth}`);
+    } catch (_error) {
+      showToast('No se pudo compartir la captura.');
+    }
   };
 
   const handleOpenItem = (item) => {
@@ -110,15 +106,28 @@ export default function WrappedScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.heroCard}>
-          <View style={styles.heroGlow} />
-          <Text style={styles.kicker}>SongBox Monthly</Text>
-          <Text style={styles.title}>Your Month in Music</Text>
-          <Text style={styles.month}>{getMonthLabel(data?.month || selectedMonth)}</Text>
-          <View style={styles.heroDivider} />
-          <Text style={styles.heroCopy}>
-            A compact snapshot of what you rated, saved, and kept coming back to.
-          </Text>
+        <View ref={shareCardRef} collapsable={false} style={styles.captureCard}>
+          <View style={styles.heroCard}>
+            <View style={styles.heroGlow} />
+            <Text style={styles.kicker}>SongBox Monthly</Text>
+            <Text style={styles.title}>Your Month in Music</Text>
+            <Text style={styles.month}>{getMonthLabel(data?.month || selectedMonth)}</Text>
+            <View style={styles.heroDivider} />
+            <Text style={styles.heroCopy}>
+              A compact snapshot of what you rated, saved, and kept coming back to.
+            </Text>
+          </View>
+
+          {!isError && hasActivity ? (
+            <View style={styles.captureStatsGrid}>
+              <StatCard label="Ratings" value={summary.ratingsCount || 0} accent="#FFD166" />
+              <StatCard label="Avg score" value={(summary.averageRating || 0).toFixed(1)} accent="#BBA7FF" />
+              <StatCard label="Favorites" value={summary.favoritesCount || 0} accent="#7AE7C7" />
+              <StatCard label="New saves" value={summary.newFavoritesCount || 0} accent="#FF8FAB" />
+            </View>
+          ) : null}
+
+          <Text style={styles.captureBrand}>Made with SongBox</Text>
         </View>
 
         {isError ? (
@@ -137,13 +146,6 @@ export default function WrappedScreen({ navigation }) {
 
         {!isError && hasActivity ? (
           <>
-            <View style={styles.statsGrid}>
-              <StatCard label="Ratings" value={summary.ratingsCount || 0} accent="#FFD166" />
-              <StatCard label="Avg score" value={(summary.averageRating || 0).toFixed(1)} accent="#BBA7FF" />
-              <StatCard label="Favorites" value={summary.favoritesCount || 0} accent="#7AE7C7" />
-              <StatCard label="New saves" value={summary.newFavoritesCount || 0} accent="#FF8FAB" />
-            </View>
-
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>You rated mostly</Text>
               <Text style={styles.bigType}>{getTypeLabel(summary.topEntityType)}</Text>
@@ -296,6 +298,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '900',
   },
+  captureCard: {
+    padding: 0,
+    backgroundColor: '#171515',
+    borderRadius: 34,
+  },
   heroCard: {
     minHeight: 250,
     borderRadius: 34,
@@ -354,6 +361,21 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 12,
     marginTop: 18,
+  },
+  captureStatsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 14,
+  },
+  captureBrand: {
+    color: '#766E81',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    marginTop: 12,
   },
   statCard: {
     width: '48%',

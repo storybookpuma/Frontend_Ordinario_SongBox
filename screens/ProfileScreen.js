@@ -24,6 +24,7 @@ import { SkeletonCard, SkeletonList } from '../components/Skeleton';
 import { queryKeys } from '../api/queryKeys';
 import { getUserId, normalizeComment, splitFavorites, resolveImageUrl } from '../utils/normalizers';
 import { useToast } from '../context/ToastContext';
+import { shareViewCapture } from '../utils/shareCapture';
 
 export default function ProfileScreen({ navigation }) {
   const { user, isLoading, axiosInstance, logout, setUser } = useContext(AuthContext);
@@ -48,6 +49,7 @@ export default function ProfileScreen({ navigation }) {
   }, [user?.profile_picture]);
 
   const scrollY = useRef(new Animated.Value(0)).current;
+  const profileCaptureRef = useRef(null);
 
   useEffect(() => {
     const refreshUser = async () => {
@@ -97,6 +99,14 @@ export default function ProfileScreen({ navigation }) {
     () => splitFavorites(favorites),
     [favorites]
   );
+
+  const handleShareProfile = useCallback(async () => {
+    try {
+      await shareViewCapture(profileCaptureRef, `songbox-profile-${user?.username || 'user'}`);
+    } catch (_error) {
+      showToast('No se pudo compartir la captura del perfil.');
+    }
+  }, [showToast, user?.username]);
 
   const handleSaveUsername = async () => {
     if (!newUsername.trim()) {
@@ -295,7 +305,7 @@ export default function ProfileScreen({ navigation }) {
 
   const listHeader = useMemo(() => (
     <>
-      <View style={styles.topRectangle}>
+      <View ref={profileCaptureRef} collapsable={false} style={styles.topRectangle}>
         <View style={styles.profileInfoContainer}>
           <TouchableOpacity style={styles.profileImageContainer} onPress={handlePickProfilePicture} disabled={isUploadingPicture}>
             <Image 
@@ -317,6 +327,11 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       </View>
+
+      <TouchableOpacity style={styles.profileShareButton} onPress={handleShareProfile} activeOpacity={0.86}>
+        <Icon name="camera" size={15} color="#171515" />
+        <Text style={styles.profileShareText}>Share Profile</Text>
+      </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.wrappedButton}
@@ -350,7 +365,7 @@ export default function ProfileScreen({ navigation }) {
 
       <Text style={styles.songsTitle}>My Favorite Songs</Text>      
     </>
-  ), [favoriteAlbums, favoriteArtists, isLoadingFavorites, profileImageSource, renderAlbumItem, renderArtistItem, setIsEditingUsername, user?.username, handlePickProfilePicture, isUploadingPicture, navigation]);
+  ), [favoriteAlbums, favoriteArtists, isLoadingFavorites, profileImageSource, renderAlbumItem, renderArtistItem, setIsEditingUsername, user?.username, handlePickProfilePicture, isUploadingPicture, navigation, handleShareProfile]);
 
   const followingSection = useMemo(() => (
     <FollowingSection
@@ -591,9 +606,31 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
   },
+  profileShareButton: {
+    alignSelf: 'center',
+    marginTop: -20,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 18,
+    backgroundColor: '#F4E7C5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    zIndex: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.24,
+    shadowRadius: 9,
+    elevation: 5,
+  },
+  profileShareText: {
+    color: '#171515',
+    fontSize: 12,
+    fontWeight: '900',
+  },
   wrappedButton: {
     marginHorizontal: 15,
-    marginTop: 18,
+    marginTop: 16,
     paddingHorizontal: 18,
     paddingVertical: 16,
     borderRadius: 24,
