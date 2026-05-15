@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
@@ -18,6 +19,8 @@ import { queryKeys } from '../api/queryKeys';
 import { getApiErrorMessage } from '../utils/errors';
 import { useToast } from '../context/ToastContext';
 
+const RECENT_SEARCHES_KEY = 'songbox:recent-searches';
+
 export default function SearchScreen({ navigation }) {
   const { axiosInstance, isLoading: authLoading } = useContext(AuthContext);
   const { showToast } = useToast();
@@ -26,6 +29,7 @@ export default function SearchScreen({ navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Albums');
+  const [recentSearches, setRecentSearches] = useState([]);
 
   const debounceTimeout = useRef(null);
   const resultsAnim = useRef(new Animated.Value(0)).current;
@@ -79,6 +83,22 @@ export default function SearchScreen({ navigation }) {
   const hasActiveSearch = searchQuery.trim().length > 0;
 
   useEffect(() => {
+    let isMounted = true;
+    AsyncStorage.getItem(RECENT_SEARCHES_KEY).then((stored) => {
+      if (!isMounted || !stored) return;
+      try {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) setRecentSearches(parsed.slice(0, 6));
+      } catch {
+        setRecentSearches([]);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     Animated.spring(resultsAnim, {
       toValue: hasActiveSearch ? 1 : 0,
       useNativeDriver: true,
@@ -96,6 +116,14 @@ export default function SearchScreen({ navigation }) {
     setSelectedCategory(category);
     setSearchQuery('');
     setDebouncedQuery('');
+  };
+
+  const saveRecentSearch = async (query) => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    const nextSearches = [trimmed, ...recentSearches.filter((item) => item.toLowerCase() !== trimmed.toLowerCase())].slice(0, 6);
+    setRecentSearches(nextSearches);
+    await AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(nextSearches));
   };
 
   const categories = ['Albums', 'Songs', 'Profiles', 'Artists'];
@@ -128,6 +156,7 @@ export default function SearchScreen({ navigation }) {
   }, [error, showToast]);
 
   const handleResultPress = (item) => {
+    saveRecentSearch(normalizedQuery);
     if (selectedCategory === 'Albums') {
       navigation.navigate('AlbumDetailsScreen', { album: item });
     } else if (selectedCategory === 'Songs') {
@@ -276,7 +305,27 @@ export default function SearchScreen({ navigation }) {
 
       {!isLoading && searchResults.length === 0 && normalizedQuery !== '' && (
         <View style={styles.noResultsContainer}>
-          <Text style={styles.noResultsText}>No se encontraron resultados.</Text>
+          <Text style={styles.noResultsTitle}>No matches for “{normalizedQuery}”</Text>
+          <Text style={styles.noResultsText}>Try another spelling or switch categories.</Text>
+        </View>
+      )}
+
+      {!hasActiveSearch && (
+        <View style={styles.discoveryPanel}>
+          <Text style={styles.discoveryTitle}>Start digging</Text>
+          <Text style={styles.discoveryText}>Search albums, songs, artists, or profiles and build your music map.</Text>
+          {recentSearches.length > 0 ? (
+            <View style={styles.recentWrap}>
+              <Text style={styles.recentTitle}>Recent searches</Text>
+              <View style={styles.recentChips}>
+                {recentSearches.map((item) => (
+                  <TouchableOpacity key={item} style={styles.recentChip} onPress={() => setSearchQuery(item)}>
+                    <Text style={styles.recentChipText}>{item}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          ) : null}
         </View>
       )}
 
@@ -397,13 +446,73 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   noResultsContainer: {
-    marginTop: 20,
-    alignItems: 'center',
+    marginTop: 22,
+    marginHorizontal: 20,
+    padding: 20,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.055)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  noResultsTitle: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '900',
+    textAlign: 'center',
   },
   noResultsText: {
+    color: '#BDB4CA',
+    fontSize: 14,
+    opacity: 0.9,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  discoveryPanel: {
+    marginHorizontal: 20,
+    marginTop: 6,
+    padding: 20,
+    borderRadius: 28,
+    backgroundColor: '#251F2F',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  discoveryTitle: {
     color: '#FFF',
-    fontSize: 16,
-    opacity: 0.7,
+    fontSize: 26,
+    fontWeight: '900',
+  },
+  discoveryText: {
+    color: '#D8D0E4',
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 8,
+  },
+  recentWrap: {
+    marginTop: 18,
+  },
+  recentTitle: {
+    color: '#F4E7C5',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  recentChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  recentChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: 'rgba(244,231,197,0.12)',
+  },
+  recentChipText: {
+    color: '#F4E7C5',
+    fontWeight: '800',
+    fontSize: 13,
   },
   searchResultsContainer: {
     paddingBottom: 130,

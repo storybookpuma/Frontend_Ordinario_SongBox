@@ -70,7 +70,7 @@ export default function ActivityScreen({ navigation }) {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Text style={styles.title}>Activity</Text>
       </View>

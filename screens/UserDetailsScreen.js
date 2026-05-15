@@ -8,11 +8,9 @@ import {
   Animated,
   Platform,
   TextInput,
-  Keyboard,
-  TouchableWithoutFeedback
 } from 'react-native';
 import { Image } from 'expo-image';
-import MenuBar from '../components/MenuBar'; 
+import { SafeAreaView } from 'react-native-safe-area-context';
 import CommentSection from '../components/CommentSection';
 import { AuthContext } from '../context/AuthContext';
 import { DetailSkeleton } from '../components/Skeleton';
@@ -149,8 +147,7 @@ export default function UserDetailsScreen({ route, navigation }) {
   const showFollowButton = user && profileData.id && (profileData.id !== user.id);
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
 
         <Animated.View style={[
           styles.stickyHeader,
@@ -369,12 +366,7 @@ export default function UserDetailsScreen({ route, navigation }) {
           )}
         />
 
-        {/* Barra de Menú Inferior */}
-        <View style={styles.menuContainer}>
-          <MenuBar />
-        </View>
-      </View>
-    </TouchableWithoutFeedback>
+    </SafeAreaView>
   );
 }
 
