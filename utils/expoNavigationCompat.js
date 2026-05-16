@@ -17,6 +17,9 @@ const ROUTE_PATHS = {
   ChartsScreen: '/ChartsScreen',
   ActivityScreen: '/ActivityScreen',
   WrappedScreen: '/WrappedScreen',
+  PlusScreen: '/PlusScreen',
+  PublicProfileScreen: '/PublicProfileScreen',
+  SettingsScreen: '/SettingsScreen',
 };
 
 const encodeParams = (params = {}) => Object.fromEntries(

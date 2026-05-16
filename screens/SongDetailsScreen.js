@@ -12,12 +12,14 @@ import {
 import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
-import { SafeAreaView } from 'react-native-safe-area-context';
+
 import { LinearGradient } from 'expo-linear-gradient';
 import CommentSection from '../components/CommentSection';
 import FavoriteButton from '../components/FavoriteButton';
 import StarRating from '../components/StarRating';
+import RatingDistribution from '../components/RatingDistribution';
 import { AuthContext } from '../context/AuthContext';
 import { DetailSkeleton } from '../components/Skeleton';
 import { queryKeys } from '../api/queryKeys';
@@ -25,17 +27,19 @@ import { useToast } from '../context/ToastContext';
 import { useFavorites } from '../hooks/useFavorites';
 import { useRating } from '../hooks/useRating';
 import { getApiErrorMessage } from '../utils/errors';
-
-const AnimatedImage = Animated.createAnimatedComponent(Image);
+import { applyRatingDistributionChange, distributionWithUserFallback, hasRatingDistribution } from '../utils/ratingDistribution';
 
 const HEADER_MAX = 340;
-const HEADER_MIN = 120;
 
-export default function SongDetailsScreen({ route }) {
-  const navigation = useNavigation();
+export default function SongDetailsScreen({ route, navigation: navigationProp }) {
+  const fallbackNavigation = useNavigation();
+  const navigation = navigationProp || fallbackNavigation;
+  const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const { axiosInstance, user } = useContext(AuthContext);
   const scrollY = useRef(new Animated.Value(0)).current;
+  const inputRef = useRef(null);
+  const promptScale = useRef(new Animated.Value(0.96)).current;
 
   const { songId: routeSongId, song: routeSong } = route.params;
   const songId = routeSongId || (routeSong && routeSong.id);
@@ -46,7 +50,9 @@ export default function SongDetailsScreen({ route }) {
   const [userRating, setUserRating] = useState(0);
   const [averageRating, setAverageRating] = useState(0);
   const [ratingCount, setRatingCount] = useState(0);
+  const [ratingDistribution, setRatingDistribution] = useState({});
   const [newComment, setNewComment] = useState('');
+  const [showReviewPrompt, setShowReviewPrompt] = useState(false);
 
   const { favorites, invalidateFavorites } = useFavorites();
   const userRatingQuery = useRating({
@@ -69,12 +75,6 @@ export default function SongDetailsScreen({ route }) {
     },
   });
 
-  const imageOpacity = scrollY.interpolate({
-    inputRange: [0, (HEADER_MAX - HEADER_MIN) * 0.6],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
   useEffect(() => {
     if (!songId) {
       showToast('No se proporcionó el ID de la canción.');
@@ -87,7 +87,17 @@ export default function SongDetailsScreen({ route }) {
     setSongData(songDetailsQuery.data);
     setAverageRating(songDetailsQuery.data.averageRating || 0);
     setRatingCount(songDetailsQuery.data.ratingCount || 0);
+    setRatingDistribution(songDetailsQuery.data.ratingDistribution || {});
   }, [songDetailsQuery.data]);
+
+  useEffect(() => {
+    Animated.spring(promptScale, {
+      toValue: showReviewPrompt ? 1 : 0.96,
+      friction: 7,
+      tension: 90,
+      useNativeDriver: true,
+    }).start();
+  }, [promptScale, showReviewPrompt]);
 
   useEffect(() => {
     if (songDetailsQuery.isError) {
@@ -148,6 +158,8 @@ export default function SongDetailsScreen({ route }) {
           onSuccess: (data) => {
             setAverageRating(data.averageRating);
             setRatingCount(data.ratingCount);
+            setRatingDistribution(hasRatingDistribution(data.ratingDistribution) ? data.ratingDistribution : applyRatingDistributionChange(ratingDistribution, userRating, 0));
+            setShowReviewPrompt(false);
           },
         });
       } catch (error) {
@@ -165,6 +177,8 @@ export default function SongDetailsScreen({ route }) {
         onSuccess: (data) => {
           setAverageRating(data.averageRating);
           setRatingCount(data.ratingCount);
+          setRatingDistribution(hasRatingDistribution(data.ratingDistribution) ? data.ratingDistribution : applyRatingDistributionChange(ratingDistribution, previousRating, rating));
+          setShowReviewPrompt(true);
         },
       });
     } catch (error) {
@@ -188,6 +202,7 @@ export default function SongDetailsScreen({ route }) {
       const updatedComments = sortComments([response.data.comment, ...comments]);
       setComments(updatedComments);
       setNewComment('');
+      setShowReviewPrompt(false);
       Keyboard.dismiss();
     } catch (_error) {
       showToast('No se pudo agregar el comentario. Verifica la conexión.');
@@ -198,21 +213,38 @@ export default function SongDetailsScreen({ route }) {
     return [...commentsList].sort((a, b) => b.likes - a.likes);
   };
 
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const scrollRef = useRef(null);
+
+  const focusCommentInput = () => {
+    inputRef.current?.focus();
+  };
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', (e) => setKeyboardHeight(e.endCoordinates.height));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+
   if (!songData) {
     return <DetailSkeleton />;
   }
 
+  const displayedRatingDistribution = distributionWithUserFallback(ratingDistribution, userRating);
+
   return (
-    <SafeAreaView edges={['bottom']} style={styles.container}>
-      <Animated.ScrollView
-        contentContainerStyle={styles.scrollContent}
-        scrollEventThrottle={16}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
-        )}
-        keyboardShouldPersistTaps="handled"
-      >
+    <View style={styles.container} collapsable={false}>
+        <Animated.ScrollView
+          ref={scrollRef}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 + keyboardHeight }]}
+          scrollEventThrottle={16}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: true }
+          )}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
         {/* Hero */}
         <View style={[styles.hero, { height: HEADER_MAX }]}>
           <Image
@@ -226,12 +258,12 @@ export default function SongDetailsScreen({ route }) {
             locations={[0, 0.5, 1]}
             style={styles.heroGradient}
           />
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <TouchableOpacity style={[styles.backButton, { top: insets.top + 8 }]} onPress={() => navigation.goBack()}>
             <Icon name="chevron-left" size={22} color="#FFF" />
           </TouchableOpacity>
-          <AnimatedImage
+          <Image
             source={{ uri: songData.cover_image }}
-            style={[styles.heroCover, { opacity: imageOpacity }]}
+            style={styles.heroCover}
             contentFit="cover"
             cachePolicy="memory-disk"
           />
@@ -319,6 +351,18 @@ export default function SongDetailsScreen({ route }) {
             <Text style={styles.ratingScore}>{averageRating.toFixed(1)}</Text>
             <Text style={styles.ratingCount}> ({ratingCount})</Text>
           </View>
+          <RatingDistribution distribution={displayedRatingDistribution} total={ratingCount} />
+          {showReviewPrompt && (
+            <Animated.View style={[styles.reviewPrompt, { transform: [{ scale: promptScale }] }]}> 
+              <View>
+                <Text style={styles.reviewPromptTitle}>Tell us why</Text>
+                <Text style={styles.reviewPromptText}>Turn that rating into a quick take.</Text>
+              </View>
+              <TouchableOpacity style={styles.reviewPromptButton} onPress={focusCommentInput} activeOpacity={0.86}>
+                <Text style={styles.reviewPromptButtonText}>Review</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
           {userRating > 0 && (
             <TouchableOpacity onPress={() => handleRatingChange(0)} disabled={userRatingQuery.isMutating}>
               <Text style={styles.deleteRating}>Eliminar calificación</Text>
@@ -328,7 +372,6 @@ export default function SongDetailsScreen({ route }) {
 
         {/* Comments */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Comments</Text>
           <CommentSection
             entityType="song"
             entityId={songData.id}
@@ -338,9 +381,10 @@ export default function SongDetailsScreen({ route }) {
           />
         </View>
 
-        {/* Comment Input */}
-        <View style={styles.inputCard}>
+        </Animated.ScrollView>
+        <View style={[styles.inputCard, { bottom: keyboardHeight ? keyboardHeight + 12 : 24 }]}>
           <TextInput
+            ref={inputRef}
             style={styles.input}
             placeholder="Write a comment..."
             placeholderTextColor="#888"
@@ -353,8 +397,7 @@ export default function SongDetailsScreen({ route }) {
             <Icon name="paper-plane" size={16} color="#FFF" />
           </TouchableOpacity>
         </View>
-      </Animated.ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -364,7 +407,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#171515',
   },
   scrollContent: {
-    paddingBottom: 24,
+    paddingBottom: 120,
   },
 
   hero: {
@@ -527,6 +570,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#888',
   },
+  reviewPrompt: {
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 18,
+    backgroundColor: 'rgba(160,113,202,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(160,113,202,0.35)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  reviewPromptTitle: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  reviewPromptText: {
+    color: '#CFC5D8',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  reviewPromptButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 99,
+    backgroundColor: '#A071CA',
+  },
+  reviewPromptButtonText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
   deleteRating: {
     color: '#E74C3C',
     fontSize: 13,
@@ -535,16 +611,18 @@ const styles = StyleSheet.create({
   },
 
   inputCard: {
-    marginHorizontal: 16,
-    marginTop: 16,
+    position: 'absolute',
+    left: 16,
+    right: 16,
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 10,
     padding: 12,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.055)',
+    backgroundColor: 'rgba(23,21,21,0.96)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(160,113,202,0.32)',
+    zIndex: 20,
   },
   input: {
     flex: 1,

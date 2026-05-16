@@ -14,4 +14,6 @@ export const queryKeys = {
   spotifyCurrentlyPlaying: ['spotifyCurrentlyPlaying'],
   monthlyWrapped: (month) => ['monthlyWrapped', month || 'current'],
   profileCompatibility: (profileId) => ['profileCompatibility', profileId],
+  badges: ['badges'],
+  tasteWall: ['tasteWall'],
 };

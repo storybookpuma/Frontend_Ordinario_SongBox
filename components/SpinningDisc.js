@@ -61,7 +61,7 @@ const SpinningDisc = ({ source, size = 56, isPlaying = false }) => {
         <View style={styles.imageWrap}>
           <Image
             source={source}
-            style={{ width: size, height: size }}
+            style={{ width: size, height: size, transform: [{ scale: 1.14 }] }}
             contentFit="cover"
             cachePolicy="memory-disk"
           />

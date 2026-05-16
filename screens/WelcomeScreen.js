@@ -10,22 +10,28 @@ export default function WelcomeScreen() {
   return (
     <View style={styles.container}>
       <VideoBackground source={require('../assets/Fondo1.mp4')} />
+      <View style={styles.scrim} />
 
-      <View style={styles.overlay}>
-        {/* Icono */}
-        <Image
-          source={require('../assets/Logo.png')}
-          style={styles.icon}
-        />
+      <View style={styles.content}>
+        <View style={styles.logoBadge}>
+          <Image source={require('../assets/Logo.png')} style={styles.icon} contentFit="contain" />
+        </View>
 
-        {/* Texto de bienvenida */}
-        <Text style={styles.title}>Enjoy Listening To Music</Text>
-        <Text style={styles.description}>
-          Explore a universe of sounds, find new musical gems and share your opinions with other music lovers. Here you can rate and comment on albums, songs, and artists.
-        </Text>
+        <View style={styles.copyCard}>
+          <Text style={styles.kicker}>Your music taste, archived</Text>
+          <Text style={styles.title}>Rate it. Save it. Compare it.</Text>
+          <Text style={styles.description}>
+            Build a living profile of the albums, songs, and artists that define your month.
+          </Text>
+        </View>
 
-        {/* Botón para navegar a Welcome2 */}
-        <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('Welcome2')}>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => navigation.navigate('Welcome2')}
+          activeOpacity={0.88}
+          accessibilityRole="button"
+          accessibilityLabel="Get started"
+        >
           <Text style={styles.buttonText}>Get started</Text>
         </TouchableOpacity>
       </View>
@@ -36,44 +42,68 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#000',
   },
-  overlay: {
+  scrim: {
     ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  content: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 22,
+    paddingBottom: 42,
+    gap: 18,
+  },
+  logoBadge: {
+    width: 84,
+    height: 84,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)'
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
   },
   icon: {
-    width: 80,
-    height: 80,
-    marginBottom: 20,
+    width: 58,
+    height: 58,
+  },
+  copyCard: {
+    padding: 22,
+    borderRadius: 30,
+    backgroundColor: 'rgba(32,27,39,0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    gap: 9,
+  },
+  kicker: {
+    color: '#F4E7C5',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'center',
-    marginBottom: 10,
+    color: '#FFF',
+    fontSize: 38,
+    fontWeight: '900',
+    lineHeight: 41,
   },
   description: {
-    fontSize: 16,
-    color: '#fff',
-    textAlign: 'center',
-    marginBottom: 30,
+    color: '#D8D0E4',
+    fontSize: 15,
+    lineHeight: 22,
   },
   button: {
-    backgroundColor: '#8A2BE2',
-    paddingVertical: 15,
-    paddingHorizontal: 50,
-    borderRadius: 30,
+    backgroundColor: '#F4E7C5',
+    paddingVertical: 17,
+    borderRadius: 22,
+    alignItems: 'center',
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: '#171515',
+    fontSize: 17,
+    fontWeight: '900',
   },
 });

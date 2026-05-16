@@ -16,6 +16,9 @@ import { AuthContext } from './context/AuthContext';
 import UserDetailsScreen from './screens/UserDetailsScreen';
 import ChartsScreen from './screens/ChartsScreen';
 import ActivityScreen from './screens/ActivityScreen';
+import PlusScreen from './screens/PlusScreen';
+import PublicProfileScreen from './screens/PublicProfileScreen';
+import SettingsScreen from './screens/SettingsScreen';
 import MenuBar from './components/MenuBar';
 
 const Stack = createNativeStackNavigator();
@@ -61,6 +64,9 @@ export default function AppNavigator() {
           <Stack.Screen name="UserDetailsScreen" component={UserDetailsScreen} options={detailScreenOptions} />
           <Stack.Screen name="ChartsScreen" component={ChartsScreen} options={detailScreenOptions} />
           <Stack.Screen name="ActivityScreen" component={ActivityScreen} options={detailScreenOptions} />
+          <Stack.Screen name="PlusScreen" component={PlusScreen} options={detailScreenOptions} />
+          <Stack.Screen name="PublicProfileScreen" component={PublicProfileScreen} options={detailScreenOptions} />
+          <Stack.Screen name="SettingsScreen" component={SettingsScreen} options={detailScreenOptions} />
         </>
       ) : (
         <>

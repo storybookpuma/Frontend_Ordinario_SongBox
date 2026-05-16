@@ -313,14 +313,14 @@ export default function HomeScreen({ navigation }) {
   const renderArtistCard = (item, index) => (
     <TouchableOpacity
       key={`${item.id || item.name}-${index}`}
-      style={[styles.artistCircleItem, index % 2 === 1 && styles.artistCircleItemSmall]}
+      style={styles.artistCircleItem}
       onPress={() => item.id && navigation.navigate('ArtistDetailsScreen', {
         artistId: item.id,
         artistName: item.name,
         artist: item,
       })}
     >
-      <Image source={item.imageSource} style={[styles.artistCircleImage, index % 2 === 1 && styles.artistCircleImageSmall]} />
+      <Image source={item.imageSource} style={styles.artistCircleImage} />
       <Text style={styles.artistCircleName} numberOfLines={2}>{item.name}</Text>
       {item.genres ? <Text style={styles.artistCircleMeta} numberOfLines={1}>{item.genres}</Text> : null}
       {item.popularity ? <Text style={styles.contentMeta}>{item.popularity}% popularity</Text> : null}
@@ -355,8 +355,9 @@ export default function HomeScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView edges={['bottom']} style={styles.container}>
+    <SafeAreaView edges={[]} style={styles.container}>
       <Animated.ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: headerScrollY } } }],
@@ -635,9 +636,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#171515'
   },
+  scrollView: {
+    flex: 1,
+    backgroundColor: '#171515',
+  },
   contentContainer: {
     paddingTop: 0,
-    paddingBottom: 120,
+    paddingBottom: 170,
+    backgroundColor: '#171515',
   },
   stickyHeader: {
     height: 84,
@@ -837,35 +843,35 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(160,113,202,0.12)',
   },
   artistCircleItem: {
-    width: 150,
-    marginRight: 18,
+    width: 180,
+    marginRight: 22,
     alignItems: 'center',
   },
   artistCircleItemSmall: {
-    width: 132,
+    width: 160,
     marginTop: 10,
   },
   artistCircleImage: {
-    width: 116,
-    height: 116,
-    borderRadius: 58,
-    marginBottom: 10,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    marginBottom: 12,
   },
   artistCircleImageSmall: {
-    width: 98,
-    height: 98,
-    borderRadius: 49,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
   },
   artistCircleName: {
     color: '#FFF',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
-    lineHeight: 18,
+    lineHeight: 20,
     textAlign: 'center',
   },
   artistCircleMeta: {
     color: '#D9D0E7',
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 4,
     textAlign: 'center',
   },

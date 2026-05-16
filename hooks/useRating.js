@@ -30,6 +30,22 @@ export const useRating = ({ entityType, entityId, name, image, artist, enabled =
     queryClient.invalidateQueries({ queryKey: ['activity'] });
   };
 
+  const updateDetailsRatingCache = (summary) => {
+    if (!summary) return;
+    queryClient.setQueryData(detailsQueryKey, (current) => {
+      if (!current) return current;
+      const ratingPatch = {
+        averageRating: summary.averageRating,
+        ratingCount: summary.ratingCount,
+        ratingDistribution: summary.ratingDistribution,
+      };
+      if (current.artist) {
+        return { ...current, artist: { ...current.artist, ...ratingPatch } };
+      }
+      return { ...current, ...ratingPatch };
+    });
+  };
+
   const createMutation = useMutation({
     mutationFn: (rating) => axiosInstance.post('/rate_entity', { entityType, entityId, rating, name, image, artist }),
     onSuccess: (_response, rating) => {
@@ -77,6 +93,7 @@ export const useRating = ({ entityType, entityId, name, image, artist, enabled =
       } else {
         response = await updateMutation.mutateAsync(rating);
       }
+      updateDetailsRatingCache(response.data);
       onSuccess?.(response.data);
     } catch (error) {
       setUserRating(previousRating);
@@ -90,6 +107,7 @@ export const useRating = ({ entityType, entityId, name, image, artist, enabled =
 
     try {
       const response = await deleteMutation.mutateAsync();
+      updateDetailsRatingCache(response.data);
       onSuccess?.(response.data);
     } catch (error) {
       setUserRating(previousRating);

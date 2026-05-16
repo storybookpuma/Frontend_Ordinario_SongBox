@@ -59,7 +59,7 @@ const AppStack = () => {
   return (
     <>
       <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#171515' } }}>
         <Stack.Screen name="index" options={{ animation: 'none' }} />
         <Stack.Screen name="MainTabs" options={{ animation: 'none' }} />
         <Stack.Screen name="Welcome" />
@@ -73,6 +73,9 @@ const AppStack = () => {
         <Stack.Screen name="ChartsScreen" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="ActivityScreen" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="WrappedScreen" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="PlusScreen" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="PublicProfileScreen" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="SettingsScreen" options={{ animation: 'slide_from_right' }} />
       </Stack>
     </>
   );

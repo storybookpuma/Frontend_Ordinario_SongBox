@@ -10,21 +10,25 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
 import SearchBar from '../components/SearchBar';
 import { SkeletonCard } from '../components/Skeleton';
 import { queryKeys } from '../api/queryKeys';
 import { getApiErrorMessage } from '../utils/errors';
 import { useToast } from '../context/ToastContext';
+import { useFavorites } from '../hooks/useFavorites';
 
 const RECENT_SEARCHES_KEY = 'songbox:recent-searches';
 
 export default function SearchScreen({ navigation }) {
-  const { axiosInstance, isLoading: authLoading } = useContext(AuthContext);
+  const { axiosInstance, isLoading: authLoading, user } = useContext(AuthContext);
   const { showToast } = useToast();
+  const { isFavorite, invalidateFavorites } = useFavorites();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const isFocused = useIsFocused();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -174,6 +178,52 @@ export default function SearchScreen({ navigation }) {
       : require('../assets/default_picture.png')
   );
 
+  const categoryToEntityType = (cat) => {
+    switch (cat) {
+      case 'Albums': return 'album';
+      case 'Songs': return 'song';
+      case 'Artists': return 'artist';
+      case 'Profiles': return 'profile';
+      default: return '';
+    }
+  };
+
+  const toggleFavoriteMutation = useMutation({
+    mutationFn: async ({ item, entityType, isFav }) => {
+      if (isFav) {
+        await axiosInstance.post('/remove_favorite', {
+          entityType,
+          entityId: item.id,
+        });
+      } else {
+        await axiosInstance.post('/add_favorite', {
+          entityType,
+          entityId: item.id,
+          name: item.name || item.title,
+          image: item.cover_image || item.image,
+          artist: item.artist || (item.artists ? item.artists.join(', ') : undefined),
+        });
+      }
+    },
+    onSuccess: () => {
+      invalidateFavorites();
+    },
+    onError: () => {
+      showToast('No se pudo actualizar favoritos.');
+    },
+  });
+
+  const handleToggleFavorite = (item) => {
+    if (!user) {
+      showToast('Inicia sesión para guardar favoritos.');
+      return;
+    }
+    const entityType = categoryToEntityType(selectedCategory);
+    if (!entityType || entityType === 'profile') return;
+    const fav = isFavorite(entityType, item.id);
+    toggleFavoriteMutation.mutate({ item, entityType, isFav: fav });
+  };
+
   const getResultSubtitle = (item) => (
     selectedCategory === 'Albums' && item.artist
       ? Array.isArray(item.artist)
@@ -186,7 +236,11 @@ export default function SearchScreen({ navigation }) {
       : null
   );
 
-  const renderResultItem = ({ item, index }) => {
+  const renderResultItem = ({ item }) => {
+    const entityType = categoryToEntityType(selectedCategory);
+    const fav = entityType && entityType !== 'profile' ? isFavorite(entityType, item.id) : false;
+    const canFavorite = Boolean(user && entityType && entityType !== 'profile');
+
     return (
       <TouchableOpacity
         style={[
@@ -201,6 +255,18 @@ export default function SearchScreen({ navigation }) {
         accessibilityLabel={`Open ${item.name || item.username || item.title || 'result'}`}
       >
         <Image source={getResultImage(item)} style={styles.collageImage} contentFit="cover" cachePolicy="memory-disk" transition={180} />
+        {canFavorite && (
+          <TouchableOpacity
+            style={styles.favButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleToggleFavorite(item);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={{ color: fav ? '#E74C3C' : '#FFF', fontSize: 18 }}>{fav ? '❤️' : '🤍'}</Text>
+          </TouchableOpacity>
+        )}
         <View style={styles.collageOverlay}>
           <Text style={styles.collageTitle} numberOfLines={2}>
             {item.name || item.username || item.title}
@@ -230,7 +296,7 @@ export default function SearchScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <Animated.View
         style={[
           styles.searchSection,
@@ -260,6 +326,7 @@ export default function SearchScreen({ navigation }) {
             <SearchBar 
               searchQuery={searchQuery} 
               handleSearchChange={handleSearchChange} 
+              isActive={isFocused}
             />
           </View>
         </View>
@@ -289,6 +356,25 @@ export default function SearchScreen({ navigation }) {
             )}
           />
         </View>
+
+        {!hasActiveSearch && (
+          <View style={styles.discoveryPanel}>
+            <Text style={styles.discoveryTitle}>Start digging</Text>
+            <Text style={styles.discoveryText}>Search albums, songs, artists, or profiles and build your music map.</Text>
+            {recentSearches.length > 0 ? (
+              <View style={styles.recentWrap}>
+                <Text style={styles.recentTitle}>Recent searches</Text>
+                <View style={styles.recentChips}>
+                  {recentSearches.map((item) => (
+                    <TouchableOpacity key={item} style={styles.recentChip} onPress={() => setSearchQuery(item)}>
+                      <Text style={styles.recentChipText}>{item}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+          </View>
+        )}
       </Animated.View>
 
       {isLoading && (
@@ -305,27 +391,8 @@ export default function SearchScreen({ navigation }) {
 
       {!isLoading && searchResults.length === 0 && normalizedQuery !== '' && (
         <View style={styles.noResultsContainer}>
-          <Text style={styles.noResultsTitle}>No matches for “{normalizedQuery}”</Text>
+          <Text style={styles.noResultsTitle}>No matches for "{normalizedQuery}"</Text>
           <Text style={styles.noResultsText}>Try another spelling or switch categories.</Text>
-        </View>
-      )}
-
-      {!hasActiveSearch && (
-        <View style={styles.discoveryPanel}>
-          <Text style={styles.discoveryTitle}>Start digging</Text>
-          <Text style={styles.discoveryText}>Search albums, songs, artists, or profiles and build your music map.</Text>
-          {recentSearches.length > 0 ? (
-            <View style={styles.recentWrap}>
-              <Text style={styles.recentTitle}>Recent searches</Text>
-              <View style={styles.recentChips}>
-                {recentSearches.map((item) => (
-                  <TouchableOpacity key={item} style={styles.recentChip} onPress={() => setSearchQuery(item)}>
-                    <Text style={styles.recentChipText}>{item}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          ) : null}
         </View>
       )}
 
@@ -469,7 +536,8 @@ const styles = StyleSheet.create({
   },
   discoveryPanel: {
     marginHorizontal: 20,
-    marginTop: 6,
+    marginTop: 36,
+    marginBottom: 16,
     padding: 20,
     borderRadius: 28,
     backgroundColor: '#251F2F',
@@ -571,5 +639,17 @@ const styles = StyleSheet.create({
     color: '#A0A0A0',
     fontSize: 14,
     marginTop: 5,
+  },
+  favButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 2,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

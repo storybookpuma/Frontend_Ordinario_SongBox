@@ -2,6 +2,7 @@
 
 import React, { useContext, useEffect, useMemo, useRef } from 'react';
 import { 
+  Alert,
   View, 
   Text, 
   StyleSheet, 
@@ -13,10 +14,29 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import { AuthContext } from '../context/AuthContext';
 import { SkeletonList } from './Skeleton';
 import { queryKeys } from '../api/queryKeys';
-import { sortComments } from '../utils/normalizers';
+import { resolveImageUrl, sortComments } from '../utils/normalizers';
 import { useToast } from '../context/ToastContext';
 
 const getCommentsSignature = (commentsList = []) => commentsList.map((comment) => comment._id || comment.id).join('|');
+
+const getRelativeTime = (value) => {
+  const timestamp = new Date(value).getTime();
+  if (!timestamp) return '';
+
+  const diffSeconds = Math.max(1, Math.floor((Date.now() - timestamp) / 1000));
+  if (diffSeconds < 60) return 'now';
+
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) return `${diffMinutes}m`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d`;
+
+  return new Date(value).toLocaleDateString();
+};
 
 export default function CommentSection({ entityType, entityId, comments = [], onAddComment, showLoadErrorAlert = true }) { 
   const { axiosInstance, user } = useContext(AuthContext);
@@ -163,7 +183,14 @@ export default function CommentSection({ entityType, entityId, comments = [], on
   };
 
   const handleDeleteComment = async (commentId) => {
-    deleteCommentMutation.mutate(commentId);
+    Alert.alert(
+      'Eliminar comentario',
+      'Esta accion no se puede deshacer.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Eliminar', style: 'destructive', onPress: () => deleteCommentMutation.mutate(commentId) },
+      ]
+    );
   };
 
   const handleLike = async (commentId) => {
@@ -178,12 +205,21 @@ export default function CommentSection({ entityType, entityId, comments = [], on
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Comentarios</Text>
+      <View style={styles.titleRow}>
+        <Text style={styles.title}>Comentarios</Text>
+        <Text style={styles.countBadge}>{visibleComments.length}</Text>
+      </View>
       <View style={styles.commentsContainer}>
         {isInitialLoading ? (
           <SkeletonList count={3} />
         ) : visibleComments.length === 0 ? (
-          <Text style={styles.noCommentsText}>No hay comentarios aún.</Text>
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <Icon name="comment-o" size={20} color="#F4E7C5" />
+            </View>
+            <Text style={styles.emptyTitle}>No hay comentarios aun</Text>
+            <Text style={styles.noCommentsText}>Se el primero en dejar una opinion.</Text>
+          </View>
         ) : (
           visibleComments.map((comment) => {
             const likedBy = Array.isArray(comment.liked_by) ? comment.liked_by : [];
@@ -191,52 +227,61 @@ export default function CommentSection({ entityType, entityId, comments = [], on
 
             const hasLiked = user && likedBy.includes(user.id.toString());
             const hasDisliked = user && dislikedBy.includes(user.id.toString());
+            const avatarUrl = resolveImageUrl(
+              comment.user_photo || comment.profile_picture || comment.user_profile_picture || comment.profilePicture
+            );
 
-            // Forzar el uso de default_picture.png para TODOS los comentarios
-            // Ignoramos comment.user_photo y siempre usamos default_picture.png
             return (
               <View key={comment._id} style={styles.commentContainer}>
                 <Image
-                  source={require('../assets/default_picture.png')}
+                  source={avatarUrl ? { uri: avatarUrl } : require('../assets/default_picture.png')}
                   style={styles.userPhoto}
+                  contentFit="cover"
                 />
                 <View style={styles.commentContent}>
                   <View style={styles.commentHeader}>
-                    <Text style={styles.username}>{comment.username}</Text>
-                    <Text style={styles.timestamp}>{new Date(comment.timestamp).toLocaleString()}</Text>
+                    <Text style={styles.username} numberOfLines={1}>{comment.username || 'SongBox user'}</Text>
+                    <Text style={styles.timestamp}>{getRelativeTime(comment.timestamp)}</Text>
                   </View>
                   <Text style={styles.commentText}>{comment.comment_text}</Text>
                   <View style={styles.reactionsContainer}>
-                    {/* Botón de Like */}
                     <TouchableOpacity 
                       onPress={() => handleLike(comment._id)} 
-                      style={styles.reactionButton}
+                      style={[styles.reactionButton, hasLiked && styles.activeLikeButton]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Like comment"
                     >
                       <Icon 
                         name={hasLiked ? "heart" : "heart-o"} 
                         size={16} 
-                        color={hasLiked ? "#E74C3C" : "#A071CA"} 
+                        color={hasLiked ? "#FF8FAB" : "#A9A0B8"} 
                       />
                       <Text style={styles.reactionText}>{comment.likes}</Text>
                     </TouchableOpacity>
 
-                    {/* Botón de Dislike */}
                     <TouchableOpacity 
                       onPress={() => handleDislike(comment._id)} 
-                      style={styles.reactionButton}
+                      style={[styles.reactionButton, hasDisliked && styles.activeDislikeButton]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Dislike comment"
                     >
                       <Icon 
                         name={hasDisliked ? "thumbs-down" : "thumbs-o-down"} 
                         size={16} 
-                        color={hasDisliked ? "#3498DB" : "#A071CA"} 
+                        color={hasDisliked ? "#7AA9FF" : "#A9A0B8"} 
                       />
                       <Text style={styles.reactionText}>{comment.dislikes}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
                 {user && String(user.id) === String(comment.user_id) && (
-                  <TouchableOpacity onPress={() => handleDeleteComment(comment._id)}>
-                    <Text style={styles.deleteText}>Eliminar</Text>
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleDeleteComment(comment._id)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete comment"
+                  >
+                    <Icon name="trash-o" size={15} color="#FF8FAB" />
                   </TouchableOpacity>
                 )}
               </View>
@@ -255,85 +300,152 @@ export default function CommentSection({ entityType, entityId, comments = [], on
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 10, // Espacio para el input
+    marginBottom: 12,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
   },
   title: {
-    fontSize: 18,
-    color: '#A071CA',
-    marginBottom: 10,
-    fontWeight: 'bold',
+    fontSize: 20,
+    color: '#FFF',
+    fontWeight: '900',
+  },
+  countBadge: {
+    color: '#171515',
+    backgroundColor: '#F4E7C5',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: '900',
   },
   commentsContainer: {
-    backgroundColor: '#333',
-    padding: 10,
-    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    padding: 12,
+    borderRadius: 24,
     marginBottom: 10,
-    width: '100%', // Asegurar que ocupe todo el ancho
+    width: '100%',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    gap: 10,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 26,
+    paddingHorizontal: 20,
+  },
+  emptyIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(244,231,197,0.12)',
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '900',
+    marginBottom: 5,
   },
   noCommentsText: { 
-    color: '#fff',
+    color: '#A9A0B8',
     textAlign: 'center',
-    marginVertical: 10,
+    fontSize: 13,
+    lineHeight: 18,
   },
   commentContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 10,
-    backgroundColor: '#2c2c2c',
-    padding: 10,
-    borderRadius: 10,
+    backgroundColor: 'rgba(32,27,39,0.82)',
+    padding: 12,
+    borderRadius: 20,
     width: '100%',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   userPhoto: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 10,
-    backgroundColor: '#555',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    marginRight: 11,
+    backgroundColor: '#2A2532',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   commentContent: {
     flex: 1,
+    minWidth: 0,
   },
   commentHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
   },
   username: {
-    color: '#A071CA',
-    fontWeight: 'bold',
+    color: '#F4E7C5',
+    fontWeight: '900',
     marginBottom: 2,
+    flex: 1,
   },
   timestamp: {
-    color: '#888',
+    color: '#766E81',
     fontSize: 12,
+    fontWeight: '800',
   },
   commentText: {
-    color: '#fff',
+    color: '#FFF',
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 4,
   },
   reactionsContainer: {
     flexDirection: 'row',
-    marginTop: 5,
+    marginTop: 10,
+    gap: 8,
   },
   reactionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 15,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  activeLikeButton: {
+    backgroundColor: 'rgba(255,143,171,0.14)',
+  },
+  activeDislikeButton: {
+    backgroundColor: 'rgba(122,169,255,0.14)',
   },
   reactionText: {
-    color: '#A071CA',
-    marginLeft: 5,
-  },
-  deleteText: {
-    color: 'red',
-    marginLeft: 10,
+    color: '#D8D0E4',
     fontSize: 12,
+    fontWeight: '900',
+  },
+  deleteButton: {
+    marginLeft: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,143,171,0.1)',
   },
   loadMoreButton: {
-    padding: 10,
+    paddingVertical: 12,
     alignItems: 'center',
+    borderRadius: 16,
+    backgroundColor: 'rgba(244,231,197,0.1)',
   },
   loadMoreText: {
-    color: '#A071CA',
-    fontWeight: 'bold',
+    color: '#F4E7C5',
+    fontWeight: '900',
   },
 });

@@ -78,7 +78,7 @@ export default function WrappedScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
@@ -168,6 +168,37 @@ export default function WrappedScreen({ navigation }) {
 
         {!isError && hasActivity ? (
           <>
+            {data?.comparison?.hasPrevious ? (
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Compared to {getMonthLabel(data.comparison.previousMonth)}</Text>
+                <View style={styles.compareGrid}>
+                  <ComparePill
+                    label="Ratings"
+                    value={data.comparison.ratingsDelta}
+                    format={(v) => `${v >= 0 ? '+' : ''}${v}`}
+                  />
+                  <ComparePill
+                    label="Avg score"
+                    value={data.comparison.averageRatingDelta}
+                    format={(v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}`}
+                  />
+                  <ComparePill
+                    label="New saves"
+                    value={data.comparison.newFavoritesDelta}
+                    format={(v) => `${v >= 0 ? '+' : ''}${v}`}
+                  />
+                </View>
+                {data.comparison.dominantTypeChanged && (
+                  <Text style={styles.compareText}>Your top category changed this month.</Text>
+                )}
+              </View>
+            ) : (
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>First month with enough data</Text>
+                <Text style={styles.compareText}>Keep rating to unlock month-over-month comparisons.</Text>
+              </View>
+            )}
+
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>You rated mostly</Text>
               <Text style={styles.bigType}>{getTypeLabel(summary.topEntityType)}</Text>
@@ -225,6 +256,17 @@ const StatCard = ({ label, value, accent }) => (
     <Text style={styles.statLabel}>{label}</Text>
   </View>
 );
+
+const ComparePill = ({ label, value, format }) => {
+  const formatted = format(value);
+  const isPositive = value >= 0;
+  return (
+    <View style={[styles.comparePill, { backgroundColor: isPositive ? 'rgba(122,231,199,0.12)' : 'rgba(231,76,60,0.12)' }]}>
+      <Text style={[styles.comparePillValue, { color: isPositive ? '#7AE7C7' : '#E74C3C' }]}>{formatted}</Text>
+      <Text style={styles.comparePillLabel}>{label}</Text>
+    </View>
+  );
+};
 
 const BarRow = ({ label, value, max }) => (
   <View style={styles.barRow}>
