@@ -79,7 +79,7 @@ export default function PublicProfileScreen({ route, navigation }) {
                   key={`${item.entityType}-${item.entityId}`}
                   style={styles.gridItem}
                   onPress={() => {
-                    if (item.entityType === 'album') navigation.navigate('AlbumDetailsScreen', { album: { id: item.entityId } });
+                    if (item.entityType === 'album') navigation.navigate('AlbumDetailsScreen', { albumId: item.entityId });
                     if (item.entityType === 'song') navigation.navigate('SongDetailsScreen', { songId: item.entityId });
                     if (item.entityType === 'artist') navigation.navigate('ArtistDetailsScreen', { artistId: item.entityId });
                   }}

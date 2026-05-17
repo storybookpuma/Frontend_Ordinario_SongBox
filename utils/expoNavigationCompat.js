@@ -22,44 +22,17 @@ const ROUTE_PATHS = {
   SettingsScreen: '/SettingsScreen',
 };
 
-const encodeParams = (params = {}) => Object.fromEntries(
-  Object.entries(params).map(([key, value]) => [
-    key,
-    typeof value === 'object' && value !== null ? JSON.stringify(value) : value,
-  ])
-);
-
-const decodeValue = (value) => {
-  if (Array.isArray(value)) {
-    return value.map(decodeValue);
-  }
-
-  if (typeof value !== 'string') {
-    return value;
-  }
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
-};
-
-const decodeParams = (params = {}) => Object.fromEntries(
-  Object.entries(params).map(([key, value]) => [key, decodeValue(value)])
-);
-
 export const useCompatNavigation = () => {
   const router = useRouter();
 
   return useMemo(() => ({
     navigate: (name, params) => {
       const pathname = ROUTE_PATHS[name] || `/${name}`;
-      router.push({ pathname, params: encodeParams(params) });
+      router.push({ pathname, params });
     },
     replace: (name, params) => {
       const pathname = ROUTE_PATHS[name] || `/${name}`;
-      router.replace({ pathname, params: encodeParams(params) });
+      router.replace({ pathname, params });
     },
     goBack: () => router.back(),
   }), [router]);
@@ -67,5 +40,5 @@ export const useCompatNavigation = () => {
 
 export const useCompatRoute = () => {
   const params = useLocalSearchParams();
-  return useMemo(() => ({ params: decodeParams(params) }), [params]);
+  return useMemo(() => ({ params }), [params]);
 };

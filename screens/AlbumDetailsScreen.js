@@ -38,11 +38,10 @@ const AlbumDetailsScreen = ({ route, navigation: navigationProp }) => {
   const promptScale = useRef(new Animated.Value(0.96)).current;
   const { axiosInstance, user } = useContext(AuthContext);
 
-  const routeAlbum = route?.params?.album;
   const routeAlbumId = route?.params?.albumId;
   const album = useMemo(
-    () => routeAlbum || (routeAlbumId ? { id: routeAlbumId } : null),
-    [routeAlbum, routeAlbumId]
+    () => (routeAlbumId ? { id: routeAlbumId } : null),
+    [routeAlbumId]
   );
 
   useEffect(() => {
@@ -60,7 +59,7 @@ const AlbumDetailsScreen = ({ route, navigation: navigationProp }) => {
   const [ratingDistribution, setRatingDistribution] = useState({});
   const [showReviewPrompt, setShowReviewPrompt] = useState(false);
 
-  const { favorites, invalidateFavorites } = useFavorites();
+  const { favorites, toggleFavorite } = useFavorites();
   const userRatingQuery = useRating({
     entityType: 'album',
     entityId: album?.id,
@@ -117,20 +116,23 @@ const AlbumDetailsScreen = ({ route, navigation: navigationProp }) => {
     setIsFavorite(nextFavorite);
     try {
       if (!nextFavorite) {
-        await axiosInstance.post('/remove_favorite', {
+        await toggleFavorite({
           entityType: 'album',
           entityId: album.id,
+          isFavorite: true,
         });
       } else {
-        await axiosInstance.post('/add_favorite', {
+        await toggleFavorite({
           entityType: 'album',
           entityId: album.id,
-          name: albumData.name,
-          image: albumData.cover_image,
-          artist: albumData.artists?.join(', '),
+          isFavorite: false,
+          favorite: {
+            name: albumData.name,
+            image: albumData.cover_image,
+            artist: albumData.artists?.join(', '),
+          },
         });
       }
-      invalidateFavorites();
     } catch (_error) {
       setIsFavorite(!nextFavorite);
       showToast('No se pudieron actualizar los favoritos.');

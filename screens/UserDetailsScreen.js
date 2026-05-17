@@ -14,18 +14,18 @@ import { Image } from 'expo-image';
 import CommentSection from '../components/CommentSection';
 import { AuthContext } from '../context/AuthContext';
 import { DetailSkeleton } from '../components/Skeleton';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../api/queryKeys';
 import { getUserId, resolveImageUrl, splitFavorites } from '../utils/normalizers';
 import { getApiErrorMessage } from '../utils/errors';
 import { useToast } from '../context/ToastContext';
 import { useProfileCompatibility } from '../hooks/useProfileCompatibility';
+import { useFollowUser } from '../hooks/useFollowUser';
 import { shareViewCapture } from '../utils/shareCapture';
 
 export default function UserDetailsScreen({ route, navigation }) {
   const { profileId } = route.params;
-  const { axiosInstance, user, setUser } = useContext(AuthContext); 
-  const queryClient = useQueryClient();
+  const { axiosInstance, user } = useContext(AuthContext);
   const { showToast } = useToast();
   const [profileData, setProfileData] = useState(null);
   const commentRef = useRef(null);
@@ -78,6 +78,7 @@ export default function UserDetailsScreen({ route, navigation }) {
     return resolved ? { uri: resolved } : require('../assets/default_picture.png');
   }, [user?.profile_picture]);
   const { albums: favoriteAlbums, songs: favoriteSongs, artists: favoriteArtists } = splitFavorites(profileData?.favorites || []);
+  const followUser = useFollowUser(profileId);
 
   const handleShareMatch = async () => {
     try {
@@ -86,38 +87,8 @@ export default function UserDetailsScreen({ route, navigation }) {
       showToast('No se pudo compartir el match.');
     }
   };
-
-
-
-  const followMutation = useMutation({
-    mutationFn: (shouldFollow) => axiosInstance.post(shouldFollow ? '/follow_user' : '/unfollow_user', {
-      profile_id: profileId,
-    }),
-    onMutate: async (shouldFollow) => {
-      const previousUser = user;
-      if (user) {
-        const following = Array.isArray(user.following) ? user.following : [];
-        setUser({
-          ...user,
-          following: shouldFollow
-            ? Array.from(new Set([...following, profileId]))
-            : following.filter((id) => id !== profileId),
-        });
-      }
-      return { previousUser };
-    },
-    onSuccess: (response) => {
-      showToast(response.data.message || 'Perfil actualizado.');
-      queryClient.invalidateQueries({ queryKey: queryKeys.followingDetails(user?.following || []) });
-    },
-    onError: (err, _shouldFollow, context) => {
-      if (context?.previousUser) setUser(context.previousUser);
-      showToast(getApiErrorMessage(err, 'No se pudo actualizar el seguimiento.'));
-    },
-  });
-
-  const handleFollow = () => followMutation.mutate(true);
-  const handleUnfollow = () => followMutation.mutate(false);
+  const handleFollow = followUser.follow;
+  const handleUnfollow = followUser.unfollow;
 
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const flatListRef = useRef(null);
@@ -255,7 +226,7 @@ export default function UserDetailsScreen({ route, navigation }) {
                           style={styles.sharedItem}
                           onPress={() => {
                             if (item.entityType === 'song') navigation.navigate('SongDetailsScreen', { songId: item.entityId });
-                            if (item.entityType === 'album') navigation.navigate('AlbumDetailsScreen', { album: { id: item.entityId } });
+                            if (item.entityType === 'album') navigation.navigate('AlbumDetailsScreen', { albumId: item.entityId });
                             if (item.entityType === 'artist') navigation.navigate('ArtistDetailsScreen', { artistId: item.entityId });
                           }}
                         >
@@ -283,7 +254,7 @@ export default function UserDetailsScreen({ route, navigation }) {
                         <TouchableOpacity 
                           style={styles.carouselItem}
                           onPress={() => {
-                            navigation.navigate('AlbumDetailsScreen', { album: { id: item.entityId } });
+                            navigation.navigate('AlbumDetailsScreen', { albumId: item.entityId });
                           }}
                         >
                           <Image source={{ uri: item.image }} style={styles.albumImage} contentFit="cover" cachePolicy="memory-disk" transition={180} placeholder={require('../assets/default_picture.png')} />

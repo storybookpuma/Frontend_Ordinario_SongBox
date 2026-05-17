@@ -67,7 +67,7 @@ export default function WrappedScreen({ navigation }) {
     if (item.entityType === 'song') {
       navigation.navigate('SongDetailsScreen', { songId: item.entityId });
     } else if (item.entityType === 'album') {
-      navigation.navigate('AlbumDetailsScreen', { album: { id: item.entityId } });
+      navigation.navigate('AlbumDetailsScreen', { albumId: item.entityId });
     } else if (item.entityType === 'artist') {
       navigation.navigate('ArtistDetailsScreen', { artistId: item.entityId });
     }

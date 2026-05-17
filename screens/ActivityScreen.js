@@ -28,7 +28,7 @@ export default function ActivityScreen({ navigation }) {
         if (item.entityType === 'song' && item.entityId) {
           navigation.navigate('SongDetailsScreen', { songId: item.entityId });
         } else if (item.entityType === 'album' && item.entityId) {
-          navigation.navigate('AlbumDetailsScreen', { album: { id: item.entityId } });
+          navigation.navigate('AlbumDetailsScreen', { albumId: item.entityId });
         } else if (item.entityType === 'artist' && item.entityId) {
           navigation.navigate('ArtistDetailsScreen', { artistId: item.entityId });
         } else if (item.entityType === 'profile' && item.entityId) {

@@ -29,7 +29,7 @@ export default function ChartsScreen({ navigation }) {
         if (activeTab === 'song') {
           navigation.navigate('SongDetailsScreen', { songId: item.entityId });
         } else if (activeTab === 'album') {
-          navigation.navigate('AlbumDetailsScreen', { album: { id: item.entityId } });
+          navigation.navigate('AlbumDetailsScreen', { albumId: item.entityId });
         } else if (activeTab === 'artist') {
           navigation.navigate('ArtistDetailsScreen', { artistId: item.entityId });
         }

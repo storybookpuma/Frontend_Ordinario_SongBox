@@ -303,7 +303,7 @@ export default function HomeScreen({ navigation }) {
     <TouchableOpacity
       key={`${item.id || item.title}-${index}`}
       style={[styles.largeContentCard, index % 3 === 0 && styles.largeContentCardWide]}
-      onPress={() => item.id && navigation.navigate('AlbumDetailsScreen', { album: item })}
+      onPress={() => item.id && navigation.navigate('AlbumDetailsScreen', { albumId: item.id })}
     >
       <Image source={item.imageSource} style={[styles.largeContentImage, index % 3 === 0 && styles.largeContentImageWide]} />
       <Text style={styles.largeContentTitle} numberOfLines={2}>{item.title}</Text>
@@ -319,7 +319,6 @@ export default function HomeScreen({ navigation }) {
       onPress={() => item.id && navigation.navigate('ArtistDetailsScreen', {
         artistId: item.id,
         artistName: item.name,
-        artist: item,
       })}
     >
       <Image source={item.imageSource} style={styles.artistCircleImage} />
@@ -452,12 +451,11 @@ export default function HomeScreen({ navigation }) {
                 if (activeTab === "Videos" && item.url) {
                   Linking.openURL(item.url);
                 } else if (activeTab === "News" && item.id) {
-                  navigation.navigate('AlbumDetailsScreen', { album: item });
+                  navigation.navigate('AlbumDetailsScreen', { albumId: item.id });
                 } else if (activeTab === "Artist" && item.id) {
                   navigation.navigate('ArtistDetailsScreen', {
                     artistId: item.id,
                     artistName: item.name,
-                    artist: item, 
                   });
                 } else {
                   showToast('Esta funcionalidad aún no está disponible.');
@@ -495,7 +493,6 @@ export default function HomeScreen({ navigation }) {
                     navigation.navigate('SongDetailsScreen', {
                       songId: song.id,
                       songName: song.title,
-                      song: song, 
                     });
                   } else {
                     showToast('Esta funcionalidad aún no está disponible.');
@@ -576,7 +573,7 @@ export default function HomeScreen({ navigation }) {
                     if (activity.entityType === 'song' && activity.entityId) {
                       navigation.navigate('SongDetailsScreen', { songId: activity.entityId });
                     } else if (activity.entityType === 'album' && activity.entityId) {
-                      navigation.navigate('AlbumDetailsScreen', { album: { id: activity.entityId } });
+                      navigation.navigate('AlbumDetailsScreen', { albumId: activity.entityId });
                     } else if (activity.entityType === 'artist' && activity.entityId) {
                       navigation.navigate('ArtistDetailsScreen', { artistId: activity.entityId });
                     } else if (activity.entityType === 'profile' && activity.entityId) {

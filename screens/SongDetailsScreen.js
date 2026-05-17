@@ -39,8 +39,7 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
   const promptScale = useRef(new Animated.Value(0.96)).current;
   const { axiosInstance, user } = useContext(AuthContext);
 
-  const { songId: routeSongId, song: routeSong } = route.params;
-  const songId = routeSongId || (routeSong && routeSong.id);
+  const songId = route?.params?.songId;
 
   const [songData, setSongData] = useState(null);
   const [isFavorite, setIsFavorite] = useState(false);
@@ -50,7 +49,7 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
   const [ratingDistribution, setRatingDistribution] = useState({});
   const [showReviewPrompt, setShowReviewPrompt] = useState(false);
 
-  const { favorites, invalidateFavorites } = useFavorites();
+  const { favorites, toggleFavorite } = useFavorites();
   const userRatingQuery = useRating({
     entityType: 'song',
     entityId: songId,
@@ -114,20 +113,23 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
     setIsFavorite(nextFavorite);
     try {
       if (!nextFavorite) {
-        await axiosInstance.post('/remove_favorite', {
+        await toggleFavorite({
           entityType: 'song',
           entityId: songId,
+          isFavorite: true,
         });
       } else {
-        await axiosInstance.post('/add_favorite', {
+        await toggleFavorite({
           entityType: 'song',
           entityId: songId,
-          name: songData.name,
-          image: songData.cover_image,
-          artist: songData.artists?.join(', '),
+          isFavorite: false,
+          favorite: {
+            name: songData.name,
+            image: songData.cover_image,
+            artist: songData.artists?.join(', '),
+          },
         });
       }
-      invalidateFavorites();
     } catch (_error) {
       setIsFavorite(!nextFavorite);
       showToast('No se pudieron actualizar los favoritos.');
@@ -252,7 +254,7 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
               <TouchableOpacity
                 onPress={() => {
                   if (songData.album_id) {
-                    navigation.navigate('AlbumDetailsScreen', { album: { id: songData.album_id } });
+                    navigation.navigate('AlbumDetailsScreen', { albumId: songData.album_id });
                   }
                 }}
               >

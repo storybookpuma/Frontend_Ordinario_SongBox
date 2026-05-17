@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
@@ -26,7 +26,7 @@ const RECENT_SEARCHES_KEY = 'songbox:recent-searches';
 export default function SearchScreen({ navigation }) {
   const { axiosInstance, isLoading: authLoading, user } = useContext(AuthContext);
   const { showToast } = useToast();
-  const { isFavorite, invalidateFavorites } = useFavorites();
+  const { isFavorite, toggleFavorite } = useFavorites();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const isFocused = useIsFocused();
   
@@ -162,9 +162,9 @@ export default function SearchScreen({ navigation }) {
   const handleResultPress = (item) => {
     saveRecentSearch(normalizedQuery);
     if (selectedCategory === 'Albums') {
-      navigation.navigate('AlbumDetailsScreen', { album: item });
+      navigation.navigate('AlbumDetailsScreen', { albumId: item.id });
     } else if (selectedCategory === 'Songs') {
-      navigation.navigate('SongDetailsScreen', { song: item });
+      navigation.navigate('SongDetailsScreen', { songId: item.id, songName: item.name });
     } else if (selectedCategory === 'Artists') {
       navigation.navigate('ArtistDetailsScreen', { artistId: item.id, artistName: item.name });
     } else if (selectedCategory === 'Profiles') {
@@ -188,31 +188,6 @@ export default function SearchScreen({ navigation }) {
     }
   };
 
-  const toggleFavoriteMutation = useMutation({
-    mutationFn: async ({ item, entityType, isFav }) => {
-      if (isFav) {
-        await axiosInstance.post('/remove_favorite', {
-          entityType,
-          entityId: item.id,
-        });
-      } else {
-        await axiosInstance.post('/add_favorite', {
-          entityType,
-          entityId: item.id,
-          name: item.name || item.title,
-          image: item.cover_image || item.image,
-          artist: item.artist || (item.artists ? item.artists.join(', ') : undefined),
-        });
-      }
-    },
-    onSuccess: () => {
-      invalidateFavorites();
-    },
-    onError: () => {
-      showToast('No se pudo actualizar favoritos.');
-    },
-  });
-
   const handleToggleFavorite = (item) => {
     if (!user) {
       showToast('Inicia sesión para guardar favoritos.');
@@ -221,7 +196,18 @@ export default function SearchScreen({ navigation }) {
     const entityType = categoryToEntityType(selectedCategory);
     if (!entityType || entityType === 'profile') return;
     const fav = isFavorite(entityType, item.id);
-    toggleFavoriteMutation.mutate({ item, entityType, isFav: fav });
+    toggleFavorite({
+      entityType,
+      entityId: item.id,
+      isFavorite: fav,
+      favorite: {
+        name: item.name || item.title,
+        image: item.cover_image || item.image,
+        artist: item.artist || (item.artists ? item.artists.join(', ') : undefined),
+      },
+    }).catch(() => {
+      showToast('No se pudo actualizar favoritos.');
+    });
   };
 
   const getResultSubtitle = (item) => (

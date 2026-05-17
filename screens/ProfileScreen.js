@@ -253,7 +253,7 @@ export default function ProfileScreen({ navigation }) {
     <TouchableOpacity 
       style={styles.carouselItem}
       onPress={() => {
-        navigation.navigate('AlbumDetailsScreen', { album: { id: item.entityId } });
+        navigation.navigate('AlbumDetailsScreen', { albumId: item.entityId });
       }}
     >
       <Image source={{ uri: item.image }} style={styles.albumImage} />
@@ -712,7 +712,7 @@ const TasteWallSection = React.memo(function TasteWallSection({ data, navigation
 
   const openItem = (item) => {
     if (item.entityType === 'song') navigation.navigate('SongDetailsScreen', { songId: item.entityId });
-    if (item.entityType === 'album') navigation.navigate('AlbumDetailsScreen', { album: { id: item.entityId } });
+    if (item.entityType === 'album') navigation.navigate('AlbumDetailsScreen', { albumId: item.entityId });
     if (item.entityType === 'artist') navigation.navigate('ArtistDetailsScreen', { artistId: item.entityId });
   };
 

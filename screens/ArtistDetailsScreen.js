@@ -38,8 +38,7 @@ const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
   const promptScale = useRef(new Animated.Value(0.96)).current;
   const { axiosInstance, user } = useContext(AuthContext);
 
-  const { artistId: routeArtistId, artist: routeArtist } = route.params;
-  const artistId = routeArtistId || (routeArtist && routeArtist.id);
+  const artistId = route?.params?.artistId;
 
   const [artistData, setArtistData] = useState(null);
   const [isFavorite, setIsFavorite] = useState(false);
@@ -49,7 +48,7 @@ const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
   const [ratingDistribution, setRatingDistribution] = useState({});
   const [showReviewPrompt, setShowReviewPrompt] = useState(false);
 
-  const { favorites, invalidateFavorites } = useFavorites();
+  const { favorites, toggleFavorite } = useFavorites();
   const userRatingQuery = useRating({
     entityType: 'artist',
     entityId: artistId,
@@ -110,20 +109,23 @@ const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
     setIsFavorite(nextFavorite);
     try {
       if (!nextFavorite) {
-        await axiosInstance.post('/remove_favorite', {
+        await toggleFavorite({
           entityType: 'artist',
           entityId: artistId,
+          isFavorite: true,
         });
       } else {
-        await axiosInstance.post('/add_favorite', {
+        await toggleFavorite({
           entityType: 'artist',
           entityId: artistId,
-          name: artistData.artist.name,
-          image: artistData.artist.image,
-          artist: artistData.artist.name,
+          isFavorite: false,
+          favorite: {
+            name: artistData.artist.name,
+            image: artistData.artist.image,
+            artist: artistData.artist.name,
+          },
         });
       }
-      invalidateFavorites();
     } catch (_error) {
       setIsFavorite(!nextFavorite);
       showToast('No se pudieron actualizar los favoritos.');
@@ -299,7 +301,6 @@ const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
                       return;
                     }
                     navigation.navigate('AlbumDetailsScreen', {
-                      album: { id: targetId, name: album?.title, cover_image: album?.image },
                       albumId: targetId,
                     });
                   }}
