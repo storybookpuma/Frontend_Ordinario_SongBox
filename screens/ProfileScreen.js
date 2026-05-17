@@ -73,8 +73,8 @@ export default function ProfileScreen({ navigation }) {
     data: favorites = [],
     isLoading: isLoadingFavorites,
   } = useQuery({
-    queryKey: queryKeys.favorites,
-    enabled: Boolean(user && axiosInstance),
+    queryKey: queryKeys.favorites(entityId),
+    enabled: Boolean(entityId && axiosInstance),
     queryFn: async () => {
       const response = await axiosInstance.get('/get_favorites');
       return response.data.favorites || [];
@@ -88,8 +88,8 @@ export default function ProfileScreen({ navigation }) {
     data: tasteWallData,
     refetch: refetchTasteWall,
   } = useQuery({
-    queryKey: queryKeys.tasteWall,
-    enabled: Boolean(user && axiosInstance),
+    queryKey: queryKeys.tasteWall(entityId),
+    enabled: Boolean(entityId && axiosInstance),
     queryFn: async () => {
       const response = await axiosInstance.get('/taste/wall');
       return response.data;

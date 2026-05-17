@@ -18,7 +18,7 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { queryKeys } from '../api/queryKeys';
-import { resolveImageUrl } from '../utils/normalizers';
+import { getUserId, resolveImageUrl } from '../utils/normalizers';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
@@ -112,11 +112,12 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
   const inputRef = useRef(null);
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
-  const queryKey = queryKeys.comments(entityType, entityId);
+  const userId = getUserId(user);
+  const queryKey = queryKeys.comments(entityType, entityId, userId);
 
   const commentsQuery = useInfiniteQuery({
     queryKey,
-    enabled: Boolean(user && entityId && axiosInstance && modalVisible),
+    enabled: Boolean(userId && entityId && axiosInstance && modalVisible),
     initialPageParam: 1,
     queryFn: async ({ pageParam }) => {
       const response = await axiosInstance.get(`/${entityType}/${entityId}/comments`, {

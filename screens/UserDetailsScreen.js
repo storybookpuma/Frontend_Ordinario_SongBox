@@ -16,7 +16,7 @@ import { AuthContext } from '../context/AuthContext';
 import { DetailSkeleton } from '../components/Skeleton';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../api/queryKeys';
-import { resolveImageUrl, splitFavorites } from '../utils/normalizers';
+import { getUserId, resolveImageUrl, splitFavorites } from '../utils/normalizers';
 import { getApiErrorMessage } from '../utils/errors';
 import { useToast } from '../context/ToastContext';
 import { useProfileCompatibility } from '../hooks/useProfileCompatibility';
@@ -31,6 +31,7 @@ export default function UserDetailsScreen({ route, navigation }) {
   const commentRef = useRef(null);
   
   const entityId = profileId; 
+  const userId = getUserId(user);
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const matchCaptureRef = useRef(null);
@@ -41,8 +42,8 @@ export default function UserDetailsScreen({ route, navigation }) {
   const isFollowing = user && user.following && user.following.includes(profileId);
 
   const profileQuery = useQuery({
-    queryKey: queryKeys.profileDetails(profileId),
-    enabled: Boolean(axiosInstance && profileId),
+    queryKey: queryKeys.profileDetails(profileId, userId),
+    enabled: Boolean(axiosInstance && profileId && userId),
     queryFn: async () => {
       const response = await axiosInstance.get('/profile_details', {
         params: { profile_id: profileId },

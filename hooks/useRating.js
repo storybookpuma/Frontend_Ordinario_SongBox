@@ -4,17 +4,19 @@ import { AuthContext } from '../context/AuthContext';
 import { queryKeys } from '../api/queryKeys';
 import { useToast } from '../context/ToastContext';
 import { getApiErrorMessage } from '../utils/errors';
+import { getUserId } from '../utils/normalizers';
 
 export const useRating = ({ entityType, entityId, name, image, artist, enabled = true }) => {
-  const { axiosInstance } = useContext(AuthContext);
+  const { axiosInstance, user } = useContext(AuthContext);
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const queryKey = queryKeys.userRating(entityType, entityId);
+  const userId = getUserId(user);
+  const queryKey = queryKeys.userRating(entityType, entityId, userId);
   const detailsQueryKey = queryKeys[entityType === 'song' ? 'songDetails' : entityType === 'album' ? 'albumDetails' : 'artistDetails'](entityId);
 
   const query = useQuery({
     queryKey,
-    enabled: Boolean(enabled && entityId && axiosInstance),
+    enabled: Boolean(enabled && entityId && userId && axiosInstance),
     queryFn: async () => {
       const response = await axiosInstance.get('/get_user_rating', {
         params: { entityType, entityId },
@@ -26,8 +28,8 @@ export const useRating = ({ entityType, entityId, name, image, artist, enabled =
   const invalidateRelated = () => {
     queryClient.invalidateQueries({ queryKey });
     queryClient.invalidateQueries({ queryKey: detailsQueryKey });
-    queryClient.invalidateQueries({ queryKey: ['charts', entityType] });
-    queryClient.invalidateQueries({ queryKey: ['activity'] });
+    queryClient.invalidateQueries({ queryKey: ['charts', entityType], exact: false });
+    queryClient.invalidateQueries({ queryKey: ['activity'], exact: false });
   };
 
   const updateDetailsRatingCache = (summary) => {

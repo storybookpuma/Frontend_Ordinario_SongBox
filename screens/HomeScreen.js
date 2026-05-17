@@ -17,7 +17,7 @@ import { AuthContext } from '../context/AuthContext';
 import LoadingScreen from '../components/LoadingScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SkeletonCard, SkeletonList } from '../components/Skeleton';
-import { normalizeAlbum, normalizeArtist, normalizeSong, resolveImageUrl } from '../utils/normalizers';
+import { getUserId, normalizeAlbum, normalizeArtist, normalizeSong, resolveImageUrl } from '../utils/normalizers';
 import { queryKeys } from '../api/queryKeys';
 import { useCharts } from '../hooks/useCharts';
 import { useActivity } from '../hooks/useActivity';
@@ -30,7 +30,7 @@ const DATA = [
   { label: "UTOPIA", title: "UTOPIA", artist: "Travis Scott", imageSource: require('../assets/travis.png') },
 ];
 
-const HOME_CACHE_KEY = 'homeSpotifyFeed:v2';
+const getHomeCacheKey = (userId) => `homeSpotifyFeed:v2:${userId}`;
 
 const formatAlbum = (album) => {
   const normalizedAlbum = normalizeAlbum(album);
@@ -77,6 +77,8 @@ export default function HomeScreen({ navigation }) {
   const { axiosInstance, isLoading: isAuthLoading, user } = useContext(AuthContext);
   const { showToast } = useToast();
   const { width: screenWidth } = useWindowDimensions();
+  const userId = getUserId(user);
+  const homeCacheKey = getHomeCacheKey(userId);
 
   const [activeTab, setActiveTab] = useState("News");
   const [newsData, setNewsData] = useState([]);
@@ -98,8 +100,8 @@ export default function HomeScreen({ navigation }) {
   const activityQuery = useActivity({ limit: 10 });
 
   const homeFeedQuery = useQuery({
-    queryKey: queryKeys.homeFeed,
-    enabled: Boolean(user && axiosInstance),
+    queryKey: queryKeys.homeFeed(userId),
+    enabled: Boolean(userId && axiosInstance),
     queryFn: async () => {
       if (!axiosInstance) {
         throw new Error("axiosInstance no está definido en el contexto.");
@@ -123,7 +125,7 @@ export default function HomeScreen({ navigation }) {
         cachedAt: Date.now(),
       };
 
-      await AsyncStorage.setItem(HOME_CACHE_KEY, JSON.stringify(homeFeed));
+      await AsyncStorage.setItem(homeCacheKey, JSON.stringify(homeFeed));
       return homeFeed;
     },
   });
@@ -175,7 +177,7 @@ export default function HomeScreen({ navigation }) {
       setMoreAlbumsData(formattedMoreAlbumsData);
       setMoreArtistsData(formattedMoreArtistsData);
 
-      await AsyncStorage.setItem(HOME_CACHE_KEY, JSON.stringify({
+      await AsyncStorage.setItem(homeCacheKey, JSON.stringify({
         newsData: formattedNewsData,
         artistsData: formattedArtistsData,
         videosData: [],
@@ -199,7 +201,7 @@ export default function HomeScreen({ navigation }) {
     } finally {
       setIsFetchingHome(false);
     }
-  }, [axiosInstance, showToast]);
+  }, [axiosInstance, homeCacheKey, showToast]);
 
   useEffect(() => {
     const initialize = async () => {
@@ -207,7 +209,7 @@ export default function HomeScreen({ navigation }) {
         if (!user) {
           return;
         }
-        const cachedHomeFeed = await AsyncStorage.getItem(HOME_CACHE_KEY);
+        const cachedHomeFeed = await AsyncStorage.getItem(homeCacheKey);
 
         if (cachedHomeFeed) {
           const parsedCache = JSON.parse(cachedHomeFeed);
@@ -224,7 +226,7 @@ export default function HomeScreen({ navigation }) {
     };
 
     initialize();
-  }, [fetchData, user, showToast]);
+  }, [fetchData, homeCacheKey, user, showToast]);
 
   useEffect(() => {
     if (activeTab === "News") {

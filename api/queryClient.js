@@ -26,6 +26,17 @@ export const queryPersister = createAsyncStoragePersister({
   key: 'songbox-react-query-cache',
 });
 
+export const clearUserScopedQueryCache = async () => {
+  queryClient.clear();
+  await queryPersister.removeClient();
+
+  const storageKeys = await AsyncStorage.getAllKeys();
+  const userScopedKeys = storageKeys.filter((key) => key.startsWith('homeSpotifyFeed:v2'));
+  if (userScopedKeys.length > 0) {
+    await AsyncStorage.multiRemove(userScopedKeys);
+  }
+};
+
 export const shouldPersistQuery = (query) => {
   const [scope] = query.queryKey;
   return ['homeFeed', 'favorites', 'albumDetails', 'artistDetails', 'songDetails', 'profileDetails', 'userRating'].includes(scope);

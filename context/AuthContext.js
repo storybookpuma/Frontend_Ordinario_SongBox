@@ -4,6 +4,7 @@ import * as ExpoLinking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { Alert, Linking } from 'react-native';
 import { createApiClient } from '../api/client';
+import { clearUserScopedQueryCache } from '../api/queryClient';
 import { API_BASE_URL } from '../config/env';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -23,7 +24,10 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setAuthToken(null);
     setAuthCompleted(false);
-    await SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY);
+    await Promise.all([
+      SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY),
+      clearUserScopedQueryCache(),
+    ]);
 
     if (!unauthorizedAlertShown.current) {
       unauthorizedAlertShown.current = true;
@@ -43,7 +47,10 @@ export const AuthProvider = ({ children }) => {
       setAuthToken(null);
       setAuthCompleted(false);
       unauthorizedAlertShown.current = false;
-      await SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY);
+      await Promise.all([
+        SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY),
+        clearUserScopedQueryCache(),
+      ]);
     } catch (error) {
       console.error('Error en logout:', error);
       Alert.alert('Error', 'Ocurrió un error al cerrar sesión.');
@@ -53,6 +60,23 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const completeSpotifyAuthFromUrl = useCallback(async (url) => {
+    const spotifyCode = extractParamFromUrl(url, 'spotify_code');
+    if (spotifyCode) {
+      try {
+        const response = await createApiClient().post('/auth/spotify/exchange', { code: spotifyCode });
+        const token = response.data.jwt;
+        await SecureStore.setItemAsync(TOKEN_STORAGE_KEY, token);
+        unauthorizedAlertShown.current = false;
+        setAuthToken(token);
+        setUser(response.data.user);
+        setAuthCompleted(true);
+        return true;
+      } catch {
+        await logout();
+        return false;
+      }
+    }
+
     const token = extractTokenFromUrl(url);
     if (!token) {
       return false;
@@ -197,7 +221,11 @@ export const AuthProvider = ({ children }) => {
 
 // Función para extraer el token del URL
 const extractTokenFromUrl = (url) => {
-  const regex = /[?#&]token=([^&]+)/;
+  return extractParamFromUrl(url, 'token');
+};
+
+const extractParamFromUrl = (url, name) => {
+  const regex = new RegExp(`[?#&]${name}=([^&]+)`);
   const match = url.match(regex);
   return match ? decodeURIComponent(match[1]) : null;
 };
