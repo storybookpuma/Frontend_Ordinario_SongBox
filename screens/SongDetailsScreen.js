@@ -5,8 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
-  TextInput,
-  Keyboard,
   Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -36,22 +34,20 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
   const navigation = navigationProp || fallbackNavigation;
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
-  const { axiosInstance, user } = useContext(AuthContext);
   const scrollY = useRef(new Animated.Value(0)).current;
-  const inputRef = useRef(null);
+  const commentRef = useRef(null);
   const promptScale = useRef(new Animated.Value(0.96)).current;
+  const { axiosInstance, user } = useContext(AuthContext);
 
   const { songId: routeSongId, song: routeSong } = route.params;
   const songId = routeSongId || (routeSong && routeSong.id);
 
   const [songData, setSongData] = useState(null);
-  const [comments, setComments] = useState([]);
   const [isFavorite, setIsFavorite] = useState(false);
   const [userRating, setUserRating] = useState(0);
   const [averageRating, setAverageRating] = useState(0);
   const [ratingCount, setRatingCount] = useState(0);
   const [ratingDistribution, setRatingDistribution] = useState({});
-  const [newComment, setNewComment] = useState('');
   const [showReviewPrompt, setShowReviewPrompt] = useState(false);
 
   const { favorites, invalidateFavorites } = useFavorites();
@@ -187,44 +183,11 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
     }
   };
 
-  const handlePostComment = async () => {
-    if (newComment.trim().length === 0) {
-      showToast('El comentario no puede estar vacío.');
-      return;
-    }
-    try {
-      const response = await axiosInstance.post(`/song/${songId}/comments`, {
-        comment_text: newComment,
-        name: songData?.name,
-        image: songData?.cover_image,
-        artist: songData?.artists?.join(', '),
-      });
-      const updatedComments = sortComments([response.data.comment, ...comments]);
-      setComments(updatedComments);
-      setNewComment('');
-      setShowReviewPrompt(false);
-      Keyboard.dismiss();
-    } catch (_error) {
-      showToast('No se pudo agregar el comentario. Verifica la conexión.');
-    }
-  };
-
-  const sortComments = (commentsList) => {
-    return [...commentsList].sort((a, b) => b.likes - a.likes);
-  };
-
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const scrollRef = useRef(null);
 
   const focusCommentInput = () => {
-    inputRef.current?.focus();
+    commentRef.current?.open();
   };
-
-  useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', (e) => setKeyboardHeight(e.endCoordinates.height));
-    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
-    return () => { show.remove(); hide.remove(); };
-  }, []);
 
   if (!songData) {
     return <DetailSkeleton />;
@@ -236,7 +199,7 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
     <View style={styles.container} collapsable={false}>
         <Animated.ScrollView
           ref={scrollRef}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 + keyboardHeight }]}
+          contentContainerStyle={styles.scrollContent}
           scrollEventThrottle={16}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -373,30 +336,14 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
         {/* Comments */}
         <View style={styles.card}>
           <CommentSection
+            ref={commentRef}
             entityType="song"
             entityId={songData.id}
-            comments={comments}
-            onAddComment={setComments}
-            navigation={navigation}
+            userRating={userRating}
           />
         </View>
 
         </Animated.ScrollView>
-        <View style={[styles.inputCard, { bottom: keyboardHeight ? keyboardHeight + 12 : 24 }]}>
-          <TextInput
-            ref={inputRef}
-            style={styles.input}
-            placeholder="Write a comment..."
-            placeholderTextColor="#888"
-            value={newComment}
-            onChangeText={setNewComment}
-            multiline
-            numberOfLines={2}
-          />
-          <TouchableOpacity style={styles.postButton} onPress={handlePostComment}>
-            <Icon name="paper-plane" size={16} color="#FFF" />
-          </TouchableOpacity>
-        </View>
     </View>
   );
 }
@@ -610,34 +557,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  inputCard: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 10,
-    padding: 12,
-    borderRadius: 22,
-    backgroundColor: 'rgba(23,21,21,0.96)',
-    borderWidth: 1,
-    borderColor: 'rgba(160,113,202,0.32)',
-    zIndex: 20,
-  },
-  input: {
-    flex: 1,
-    color: '#FFF',
-    fontSize: 15,
-    paddingVertical: 8,
-    maxHeight: 80,
-    textAlignVertical: 'top',
-  },
-  postButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#A071CA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 });

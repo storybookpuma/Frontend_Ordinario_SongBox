@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Animated,
   Platform,
-  TextInput,
   Keyboard,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -29,8 +28,7 @@ export default function UserDetailsScreen({ route, navigation }) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [profileData, setProfileData] = useState(null);
-  const [comments, setComments] = useState([]);
-  const [newComment, setNewComment] = useState('');
+  const commentRef = useRef(null);
   
   const entityId = profileId; 
 
@@ -88,33 +86,7 @@ export default function UserDetailsScreen({ route, navigation }) {
     }
   };
 
-  const handleAddComment = (updatedComments) => {
-    setComments(updatedComments);
-  };
 
-  const handlePostComment = async () => {
-    if (newComment.trim().length === 0) {
-      showToast("El comentario no puede estar vacío.");
-      return;
-    }
-
-    try {
-      if (!axiosInstance) {
-        throw new Error("axiosInstance no está definido en el contexto.");
-      }
-
-      const response = await axiosInstance.post(`/profile/${entityId}/comments`, {
-        comment_text: newComment,
-      });
-
-      const updatedComments = [response.data.comment, ...comments];
-      setComments(updatedComments);
-      setNewComment('');
-    } catch (error) {
-      console.error("Error al agregar el comentario:", error.message);
-      showToast("No se pudo agregar el comentario.");
-    }
-  };
 
   const followMutation = useMutation({
     mutationFn: (shouldFollow) => axiosInstance.post(shouldFollow ? '/follow_user' : '/unfollow_user', {
@@ -387,33 +359,10 @@ export default function UserDetailsScreen({ route, navigation }) {
 
                 {/* Sección de comentarios */}
                 <CommentSection
+                  ref={commentRef}
                   entityType="profile"
                   entityId={entityId}
-                  comments={comments}
-                  onAddComment={handleAddComment}
-                  navigation={navigation}
                 />
-
-                {/* Campo de entrada para nuevos comentarios */}
-                <View style={styles.inputContainer}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Escribe un comentario..."
-                    placeholderTextColor="#888"
-                    value={newComment}
-                    onChangeText={setNewComment}
-                    multiline={true}
-                    numberOfLines={3}
-                    onFocus={() => {
-                      setTimeout(() => {
-                        flatListRef.current?.scrollToEnd?.({ animated: true });
-                      }, 350);
-                    }}
-                  />
-                  <TouchableOpacity style={styles.postButton} onPress={handlePostComment}>
-                    <Text style={styles.postButtonText}>Publicar</Text>
-                  </TouchableOpacity>
-                </View>
               </>
             }
             data={[]} 
@@ -917,37 +866,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
     fontSize: 16,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    borderTopWidth: 1,
-    borderColor: '#444',
-    paddingTop: 10,
-    marginTop: 15,
-    paddingHorizontal: 10,
-    width: '100%',
-    backgroundColor: '#171515',
-  },
-  input: {
-    flex: 1,
-    backgroundColor: '#2c2c2c',
-    color: '#fff',
-    padding: 10,
-    borderRadius: 10,
-    marginRight: 10,
-    textAlignVertical: 'top',
-    maxHeight: 100,
-  },
-  postButton: {
-    backgroundColor: '#A071CA',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 10,
-    alignSelf: 'flex-end',
-  },
-  postButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
   },
 });

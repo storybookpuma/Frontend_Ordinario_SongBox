@@ -1,70 +1,127 @@
-// src/components/CommentSection.js
-
-import React, { useContext, useEffect, useMemo, useRef } from 'react';
-import { 
-  Alert,
-  View, 
-  Text, 
-  StyleSheet, 
+import React, { useState, useEffect, useContext, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
   TouchableOpacity,
+  FlatList,
+  TextInput,
+  Keyboard,
+  Modal,
+  Animated,
+  Dimensions,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
-import { SkeletonList } from './Skeleton';
-import { queryKeys } from '../api/queryKeys';
-import { resolveImageUrl, sortComments } from '../utils/normalizers';
 import { useToast } from '../context/ToastContext';
+import { queryKeys } from '../api/queryKeys';
+import { resolveImageUrl } from '../utils/normalizers';
 
-const getCommentsSignature = (commentsList = []) => commentsList.map((comment) => comment._id || comment.id).join('|');
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 const getRelativeTime = (value) => {
   const timestamp = new Date(value).getTime();
   if (!timestamp) return '';
-
   const diffSeconds = Math.max(1, Math.floor((Date.now() - timestamp) / 1000));
   if (diffSeconds < 60) return 'now';
-
   const diffMinutes = Math.floor(diffSeconds / 60);
   if (diffMinutes < 60) return `${diffMinutes}m`;
-
   const diffHours = Math.floor(diffMinutes / 60);
   if (diffHours < 24) return `${diffHours}h`;
-
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays < 7) return `${diffDays}d`;
-
   return new Date(value).toLocaleDateString();
 };
 
-export default function CommentSection({ entityType, entityId, comments = [], onAddComment, showLoadErrorAlert = true }) { 
-  const { axiosInstance, user } = useContext(AuthContext);
-  const queryClient = useQueryClient();
-  const { showToast } = useToast();
-  const queryKey = useMemo(() => queryKeys.comments(entityType, entityId), [entityId, entityType]);
-  const lastSyncedSignature = useRef('');
+const StarRatingMini = ({ rating }) => {
+  if (!rating || rating === 0) return null;
+  return (
+    <View style={styles.starRow}>
+      <Icon name="star" size={11} color="#FFD700" />
+      <Text style={styles.starText}>{rating}</Text>
+    </View>
+  );
+};
+
+function CommentRow({ comment, userId, onLike, onReply, onDelete, currentUserRating, isReply = false }) {
+  const [liked, setLiked] = useState(Boolean(userId && comment.liked_by?.includes(userId)));
+  const [localLikes, setLocalLikes] = useState(comment.likes || 0);
+  const isOwner = userId && String(comment.user_id) === String(userId);
+  const avatarUrl = resolveImageUrl(comment.user_photo);
+  const displayRating = isOwner && currentUserRating > 0 ? currentUserRating : comment.author_rating;
 
   useEffect(() => {
-    const nextSignature = getCommentsSignature(comments);
-    if (comments.length > 0 && entityId && nextSignature !== lastSyncedSignature.current) {
-      lastSyncedSignature.current = nextSignature;
-      queryClient.setQueryData(queryKey, {
-        pages: [{ comments, pagination: { page: 1, total_pages: 1 } }],
-        pageParams: [1],
-      });
-    }
-  }, [comments, entityId, queryClient, queryKey]);
+    setLiked(Boolean(userId && comment.liked_by?.includes(userId)));
+    setLocalLikes(comment.likes || 0);
+  }, [comment.liked_by, comment.likes, userId]);
+
+  const handleLike = () => {
+    const newLiked = !liked;
+    setLiked(newLiked);
+    setLocalLikes((prev) => prev + (newLiked ? 1 : -1));
+    onLike(comment._id);
+  };
+
+  return (
+    <View style={[styles.commentContainer, isReply && styles.replyContainer]}>
+      <Image
+        source={avatarUrl ? { uri: avatarUrl } : require('../assets/default_picture.png')}
+        style={[styles.avatar, isReply && styles.replyAvatar]}
+        contentFit="cover"
+      />
+      <View style={styles.commentBody}>
+        <View style={styles.commentHeaderRow}>
+          <Text style={[styles.username, isReply && styles.replyUsername]} numberOfLines={1}>{comment.username || 'SongBox user'}</Text>
+          <StarRatingMini rating={displayRating} />
+          <Text style={[styles.timestamp, isReply && styles.replyTimestamp]}>{getRelativeTime(comment.timestamp)}</Text>
+        </View>
+        <Text style={[styles.commentText, isReply && styles.replyText]}>{comment.comment_text}</Text>
+        <View style={styles.commentActions}>
+          <TouchableOpacity onPress={handleLike} style={styles.actionButton} hitSlop={8}>
+            <Icon name={liked ? 'heart' : 'heart-o'} size={12} color={liked ? '#FF8FAB' : '#A9A0B8'} />
+            <Text style={[styles.actionText, liked && { color: '#FF8FAB' }]}>{localLikes > 0 ? localLikes : ''}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => onReply(comment)} style={styles.actionButton} hitSlop={8}>
+            <Icon name="reply" size={11} color="#A9A0B8" />
+            <Text style={styles.actionText}>Reply</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      {isOwner && (
+        <TouchableOpacity onPress={() => onDelete(comment._id)} style={styles.deleteBtn} hitSlop={8}>
+          <Icon name="trash-o" size={12} color="#FF8FAB" />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+const CommentSection = forwardRef(function CommentSection({ entityType, entityId, userRating }, ref) {
+  const { axiosInstance, user } = useContext(AuthContext);
+  const { showToast } = useToast();
+  const queryClient = useQueryClient();
+  const [modalVisible, setModalVisible] = useState(false);
+  const [commentText, setCommentText] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [expandedReplies, setExpandedReplies] = useState({});
+  const [replyData, setReplyData] = useState({});
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const inputRef = useRef(null);
+  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+
+  const queryKey = queryKeys.comments(entityType, entityId);
 
   const commentsQuery = useInfiniteQuery({
     queryKey,
-    enabled: Boolean(user && entityId && axiosInstance),
+    enabled: Boolean(user && entityId && axiosInstance && modalVisible),
     initialPageParam: 1,
     queryFn: async ({ pageParam }) => {
       const response = await axiosInstance.get(`/${entityType}/${entityId}/comments`, {
         params: { page: pageParam, limit: 10 },
       });
-
       return {
         comments: response.data.comments || [],
         pagination: response.data.pagination || { page: pageParam, total_pages: 1 },
@@ -77,375 +134,615 @@ export default function CommentSection({ entityType, entityId, comments = [], on
     },
   });
 
-  const visibleComments = useMemo(() => {
-    const queryComments = commentsQuery.data?.pages.flatMap((page) => page.comments || []) || [];
-    return sortComments(queryComments);
-  }, [commentsQuery.data]);
+  const comments = commentsQuery.data?.pages.flatMap((page) => page.comments || []) || [];
 
-  useEffect(() => {
-    const nextSignature = getCommentsSignature(visibleComments);
-    if (visibleComments.length > 0 && nextSignature !== lastSyncedSignature.current) {
-      lastSyncedSignature.current = nextSignature;
-      onAddComment?.(visibleComments);
-    }
-  }, [onAddComment, visibleComments]);
-
-  useEffect(() => {
-    if (commentsQuery.isError) {
-      console.error("Error al obtener los comentarios:", commentsQuery.error?.message);
-      if (showLoadErrorAlert) {
-        showToast("No se pudieron cargar los comentarios.");
-      }
-    }
-  }, [commentsQuery.error?.message, commentsQuery.isError, showLoadErrorAlert, showToast]);
-
-  const updateCachedComments = (updater) => {
-    queryClient.setQueryData(queryKey, (current) => {
-      if (!current?.pages) return current;
-
-      return {
-        ...current,
-        pages: current.pages.map((page) => ({
-          ...page,
-          comments: updater(page.comments || []),
-        })),
+  const postMutation = useMutation({
+    mutationFn: ({ text, parentId }) => {
+      const payload = { comment_text: text };
+      if (parentId) payload.parent_id = parentId;
+      return axiosInstance.post(`/${entityType}/${entityId}/comments`, payload);
+    },
+    onSuccess: (response, variables) => {
+      const createdComment = {
+        ...(response.data.comment || {}),
+        author_rating: response.data.comment?.author_rating || userRating || 0,
+        reply_count: response.data.comment?.reply_count || 0,
       };
+      setCommentText('');
+      setReplyingTo(null);
+      Keyboard.dismiss();
+      if (variables.parentId) {
+        setReplyData((current) => ({
+          ...current,
+          [variables.parentId]: [...(current[variables.parentId] || []), createdComment],
+        }));
+        setExpandedReplies((current) => ({ ...current, [variables.parentId]: true }));
+        queryClient.setQueryData(queryKey, (current) => {
+          if (!current?.pages) return current;
+          return {
+            ...current,
+            pages: current.pages.map((page) => ({
+              ...page,
+              comments: (page.comments || []).map((comment) => (
+                comment._id === variables.parentId
+                  ? { ...comment, reply_count: (comment.reply_count || 0) + 1 }
+                  : comment
+              )),
+            })),
+          };
+        });
+        return;
+      }
+      queryClient.setQueryData(queryKey, (current) => {
+        if (!current?.pages?.length) return current;
+        return {
+          ...current,
+          pages: current.pages.map((page, index) => index === 0 ? {
+            ...page,
+            comments: [createdComment, ...(page.comments || [])],
+            pagination: {
+              ...page.pagination,
+              total_comments: (page.pagination?.total_comments || 0) + 1,
+            },
+          } : page),
+        };
+      });
+    },
+    onError: (error) => {
+      console.error('Error posting comment:', error?.response?.data || error?.message || error);
+      showToast('No se pudo agregar el comentario.');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (commentId) => axiosInstance.delete(`/${entityType}/${entityId}/comments/${commentId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: () => {
+      showToast('No se pudo eliminar el comentario.');
+    },
+  });
+
+  const likeMutation = useMutation({
+    mutationFn: (commentId) => axiosInstance.post(`/${entityType}/${entityId}/comments/${commentId}/like`),
+    onError: () => {
+      showToast('No se pudo actualizar el like.');
+    },
+  });
+
+  const openModal = useCallback(() => {
+    setModalVisible(true);
+    Animated.spring(slideAnim, {
+      toValue: 0,
+      friction: 9,
+      tension: 65,
+      useNativeDriver: true,
+    }).start();
+  }, [slideAnim]);
+
+  useImperativeHandle(ref, () => ({ open: openModal }), [openModal]);
+
+  const closeModal = () => {
+    Animated.timing(slideAnim, {
+      toValue: SCREEN_HEIGHT,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setModalVisible(false);
+      setReplyingTo(null);
+      setExpandedReplies({});
+      setReplyData({});
     });
   };
 
-  const deleteCommentMutation = useMutation({
-    mutationFn: (commentId) => axiosInstance.delete(`/${entityType}/${entityId}/comments/${commentId}`),
-    onMutate: async (commentId) => {
-      await queryClient.cancelQueries({ queryKey });
-      const previousComments = queryClient.getQueryData(queryKey);
-      updateCachedComments((cachedComments) => cachedComments.filter((comment) => comment._id !== commentId));
-      return { previousComments };
-    },
-    onError: (_error, _commentId, context) => {
-      queryClient.setQueryData(queryKey, context?.previousComments);
-      showToast("No se pudo eliminar el comentario.");
-    },
-  });
+  useEffect(() => {
+    if (!modalVisible) return;
+    const show = Keyboard.addListener('keyboardDidShow', (e) => setKeyboardHeight(e.endCoordinates.height));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
+    return () => { show.remove(); hide.remove(); };
+  }, [modalVisible]);
 
-  const reactionMutation = useMutation({
-    mutationFn: ({ commentId, reaction }) => axiosInstance.post(`/${entityType}/${entityId}/comments/${commentId}/${reaction}`),
-    onMutate: async ({ commentId, reaction }) => {
-      await queryClient.cancelQueries({ queryKey });
-      const previousComments = queryClient.getQueryData(queryKey);
-      const userId = user?.id?.toString();
 
-      updateCachedComments((cachedComments) => cachedComments.map((comment) => {
-        if (comment._id !== commentId || !userId) return comment;
 
-        const likedBy = Array.isArray(comment.liked_by) ? comment.liked_by : [];
-        const dislikedBy = Array.isArray(comment.disliked_by) ? comment.disliked_by : [];
-        const isLike = reaction === 'like';
-        const hasLiked = likedBy.includes(userId);
-        const hasDisliked = dislikedBy.includes(userId);
-
-        if (isLike) {
-          return {
-            ...comment,
-            liked_by: hasLiked ? likedBy.filter((id) => id !== userId) : [...likedBy, userId],
-            disliked_by: hasDisliked ? dislikedBy.filter((id) => id !== userId) : dislikedBy,
-            likes: Math.max(0, (comment.likes || 0) + (hasLiked ? -1 : 1)),
-            dislikes: Math.max(0, (comment.dislikes || 0) - (hasDisliked ? 1 : 0)),
-          };
-        }
-
-        return {
-          ...comment,
-          disliked_by: hasDisliked ? dislikedBy.filter((id) => id !== userId) : [...dislikedBy, userId],
-          liked_by: hasLiked ? likedBy.filter((id) => id !== userId) : likedBy,
-          dislikes: Math.max(0, (comment.dislikes || 0) + (hasDisliked ? -1 : 1)),
-          likes: Math.max(0, (comment.likes || 0) - (hasLiked ? 1 : 0)),
-        };
-      }));
-
-      return { previousComments };
-    },
-    onSuccess: (response) => {
-      const updatedComment = response.data.comment;
-      updateCachedComments((cachedComments) => cachedComments.map((comment) => (
-        comment._id === updatedComment._id ? updatedComment : comment
-      )));
-    },
-    onError: (_error, _variables, context) => {
-      queryClient.setQueryData(queryKey, context?.previousComments);
-      showToast("No se pudo actualizar la reacción.");
-    },
-  });
-
-  const handleLoadMore = () => {
-    if (commentsQuery.hasNextPage && !commentsQuery.isFetchingNextPage) {
-      commentsQuery.fetchNextPage();
+  useEffect(() => {
+    if (replyingTo && inputRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
+  }, [replyingTo]);
+
+  const handlePost = () => {
+    const text = commentText.trim();
+    if (!text) {
+      showToast('El comentario no puede estar vacío.');
+      return;
+    }
+    postMutation.mutate({ text, parentId: replyingTo?._id });
   };
 
-  const handleDeleteComment = async (commentId) => {
-    Alert.alert(
-      'Eliminar comentario',
-      'Esta accion no se puede deshacer.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Eliminar', style: 'destructive', onPress: () => deleteCommentMutation.mutate(commentId) },
-      ]
-    );
+  const handleLike = (commentId) => {
+    likeMutation.mutate(commentId);
   };
 
-  const handleLike = async (commentId) => {
-    reactionMutation.mutate({ commentId, reaction: 'like' });
+  const handleDelete = (commentId) => {
+    Alert.alert('Eliminar comentario', 'Esta acción no se puede deshacer.', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: () => deleteMutation.mutate(commentId) },
+    ]);
   };
 
-  const handleDislike = async (commentId) => {
-    reactionMutation.mutate({ commentId, reaction: 'dislike' });
+  const handleReply = (comment) => {
+    setReplyingTo(comment);
+    setTimeout(() => inputRef.current?.focus(), 100);
   };
 
-  const isInitialLoading = commentsQuery.isLoading && visibleComments.length === 0;
+  const cancelReply = () => {
+    setReplyingTo(null);
+    Keyboard.dismiss();
+  };
+
+  const toggleReplies = async (commentId) => {
+    if (expandedReplies[commentId]) {
+      setExpandedReplies((prev) => ({ ...prev, [commentId]: false }));
+      return;
+    }
+    if (!replyData[commentId]) {
+      try {
+        const response = await axiosInstance.get(`/${entityType}/${entityId}/comments/${commentId}/replies`);
+        setReplyData((prev) => ({ ...prev, [commentId]: response.data.replies || [] }));
+      } catch {
+        showToast('No se pudieron cargar las respuestas.');
+        return;
+      }
+    }
+    setExpandedReplies((prev) => ({ ...prev, [commentId]: true }));
+  };
+
+  const count = commentsQuery.data?.pages?.[0]?.pagination?.total_comments ?? 0;
+  const isInitialLoading = commentsQuery.isLoading;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.titleRow}>
-        <Text style={styles.title}>Comentarios</Text>
-        <Text style={styles.countBadge}>{visibleComments.length}</Text>
-      </View>
-      <View style={styles.commentsContainer}>
-        {isInitialLoading ? (
-          <SkeletonList count={3} />
-        ) : visibleComments.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIcon}>
-              <Icon name="comment-o" size={20} color="#F4E7C5" />
+    <>
+      <TouchableOpacity style={styles.discussionButton} onPress={openModal} activeOpacity={0.8}>
+        <View style={styles.discussionIconWrap}>
+          <Icon name="comments" size={16} color="#F4E7C5" />
+        </View>
+        <View style={styles.discussionTextWrap}>
+          <Text style={styles.discussionTitle}>Reseñas</Text>
+          <Text style={styles.discussionSub}>
+            {count > 0 ? `${count} ${count === 1 ? 'reseña' : 'reseñas'}` : 'Sin reseñas aún'}
+          </Text>
+        </View>
+        <Icon name="chevron-up" size={14} color="#A071CA" />
+      </TouchableOpacity>
+
+      <Modal visible={modalVisible} transparent animationType="none" onRequestClose={closeModal}>
+        <View style={styles.overlay}>
+          <TouchableOpacity style={styles.overlayBg} activeOpacity={1} onPress={closeModal} />
+          <Animated.View style={[styles.sheet, keyboardHeight > 0 && { paddingBottom: 0 }, { transform: [{ translateY: slideAnim }] }]}>
+            <View style={styles.handleBar} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Reseñas</Text>
+              <TouchableOpacity onPress={closeModal} hitSlop={12}>
+                <Icon name="times" size={18} color="#A9A0B8" />
+              </TouchableOpacity>
             </View>
-            <Text style={styles.emptyTitle}>No hay comentarios aun</Text>
-            <Text style={styles.noCommentsText}>Se el primero en dejar una opinion.</Text>
-          </View>
-        ) : (
-          visibleComments.map((comment) => {
-            const likedBy = Array.isArray(comment.liked_by) ? comment.liked_by : [];
-            const dislikedBy = Array.isArray(comment.disliked_by) ? comment.disliked_by : [];
 
-            const hasLiked = user && likedBy.includes(user.id.toString());
-            const hasDisliked = user && dislikedBy.includes(user.id.toString());
-            const avatarUrl = resolveImageUrl(
-              comment.user_photo || comment.profile_picture || comment.user_profile_picture || comment.profilePicture
-            );
-
-            return (
-              <View key={comment._id} style={styles.commentContainer}>
-                <Image
-                  source={avatarUrl ? { uri: avatarUrl } : require('../assets/default_picture.png')}
-                  style={styles.userPhoto}
-                  contentFit="cover"
-                />
-                <View style={styles.commentContent}>
-                  <View style={styles.commentHeader}>
-                    <Text style={styles.username} numberOfLines={1}>{comment.username || 'SongBox user'}</Text>
-                    <Text style={styles.timestamp}>{getRelativeTime(comment.timestamp)}</Text>
-                  </View>
-                  <Text style={styles.commentText}>{comment.comment_text}</Text>
-                  <View style={styles.reactionsContainer}>
-                    <TouchableOpacity 
-                      onPress={() => handleLike(comment._id)} 
-                      style={[styles.reactionButton, hasLiked && styles.activeLikeButton]}
-                      accessibilityRole="button"
-                      accessibilityLabel="Like comment"
-                    >
-                      <Icon 
-                        name={hasLiked ? "heart" : "heart-o"} 
-                        size={16} 
-                        color={hasLiked ? "#FF8FAB" : "#A9A0B8"} 
-                      />
-                      <Text style={styles.reactionText}>{comment.likes}</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity 
-                      onPress={() => handleDislike(comment._id)} 
-                      style={[styles.reactionButton, hasDisliked && styles.activeDislikeButton]}
-                      accessibilityRole="button"
-                      accessibilityLabel="Dislike comment"
-                    >
-                      <Icon 
-                        name={hasDisliked ? "thumbs-down" : "thumbs-o-down"} 
-                        size={16} 
-                        color={hasDisliked ? "#7AA9FF" : "#A9A0B8"} 
-                      />
-                      <Text style={styles.reactionText}>{comment.dislikes}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                {user && String(user.id) === String(comment.user_id) && (
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => handleDeleteComment(comment._id)}
-                    accessibilityRole="button"
-                    accessibilityLabel="Delete comment"
-                  >
-                    <Icon name="trash-o" size={15} color="#FF8FAB" />
-                  </TouchableOpacity>
-                )}
+            <View style={styles.sheetBody}>
+            {isInitialLoading && comments.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Icon name="comment-o" size={28} color="#F4E7C5" />
+                <Text style={styles.emptyTitle}>Loading...</Text>
               </View>
-            );
-          })
-        )}
-        {commentsQuery.hasNextPage && (
-          <TouchableOpacity style={styles.loadMoreButton} onPress={handleLoadMore}>
-            <Text style={styles.loadMoreText}>{commentsQuery.isFetchingNextPage ? 'Cargando...' : 'Cargar más comentarios'}</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
+            ) : comments.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Icon name="comment-o" size={28} color="#F4E7C5" />
+                <Text style={styles.emptyTitle}>Sin reseñas aún</Text>
+                <Text style={styles.emptySub}>Sé el primero en compartir tu opinión.</Text>
+              </View>
+            ) : (
+              <FlatList
+                style={{ flex: 1 }}
+                data={comments}
+                keyExtractor={(item) => item._id}
+                keyboardShouldPersistTaps="always"
+                contentContainerStyle={[styles.listContent, keyboardHeight > 0 && { paddingBottom: keyboardHeight + 20 }]}
+                renderItem={({ item }) => (
+                  <View>
+                    <CommentRow
+                      comment={item}
+                      userId={user?.id}
+                      onLike={handleLike}
+                      onReply={handleReply}
+                      onDelete={handleDelete}
+                      currentUserRating={userRating}
+                    />
+                    {item.reply_count > 0 && !expandedReplies[item._id] && (
+                      <TouchableOpacity
+                        style={styles.viewRepliesBtn}
+                        onPress={() => toggleReplies(item._id)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.threadDot} />
+                        <Text style={styles.viewRepliesText}>
+                          {item.reply_count === 1 ? 'Ver 1 respuesta' : `Ver ${item.reply_count} respuestas`}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    {expandedReplies[item._id] && (
+                      <View style={styles.repliesContainer}>
+                        {(replyData[item._id] || []).map((reply) => (
+                          <CommentRow
+                            key={reply._id}
+                            comment={reply}
+                            userId={user?.id}
+                            onLike={handleLike}
+                            onReply={handleReply}
+                            onDelete={handleDelete}
+                            currentUserRating={userRating}
+                            isReply
+                          />
+                        ))}
+                        <TouchableOpacity
+                          style={styles.hideRepliesBtn}
+                          onPress={() => toggleReplies(item._id)}
+                          activeOpacity={0.7}
+                        >
+                          <Icon name="chevron-up" size={10} color="#A071CA" />
+                          <Text style={styles.viewRepliesText}>Ocultar respuestas</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                )}
+                onEndReached={() => {
+                  if (commentsQuery.hasNextPage && !commentsQuery.isFetchingNextPage) {
+                    commentsQuery.fetchNextPage();
+                  }
+                }}
+                onEndReachedThreshold={0.3}
+                ListFooterComponent={commentsQuery.isFetchingNextPage ? (
+                  <Text style={styles.loadingMore}>Loading more...</Text>
+                ) : null}
+              />
+            )}
+            </View>
+
+            {replyingTo && (
+              <View style={styles.replyingBar}>
+                <Text style={styles.replyingText} numberOfLines={1}>
+                  Respondiendo a @{replyingTo.username}
+                </Text>
+                <TouchableOpacity onPress={cancelReply} hitSlop={8}>
+                  <Icon name="times" size={14} color="#A071CA" />
+                </TouchableOpacity>
+              </View>
+            )}
+            <View style={[styles.inputBar, keyboardHeight > 0 && { paddingBottom: keyboardHeight + 8 }]}>
+              <Image
+                source={
+                  user?.profile_picture
+                    ? { uri: resolveImageUrl(user.profile_picture) }
+                    : require('../assets/default_picture.png')
+                }
+                style={styles.inputAvatar}
+                contentFit="cover"
+              />
+              <TextInput
+                ref={inputRef}
+                style={styles.input}
+                placeholder={replyingTo ? 'Escribe una respuesta...' : 'Agrega una reseña...'}
+                placeholderTextColor="#888"
+                value={commentText}
+                onChangeText={setCommentText}
+                multiline
+                maxLength={500}
+              />
+              <TouchableOpacity
+                style={[styles.sendButton, !commentText.trim() && styles.sendButtonDisabled]}
+                onPress={handlePost}
+                disabled={!commentText.trim() || postMutation.isPending}
+                activeOpacity={0.7}
+              >
+                <Icon name="paper-plane" size={14} color={commentText.trim() ? '#FFF' : '#555'} />
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </View>
+      </Modal>
+    </>
   );
-}
+});
+
+export default CommentSection;
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 12,
-  },
-  titleRow: {
+  discussionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 10,
-  },
-  title: {
-    fontSize: 20,
-    color: '#FFF',
-    fontWeight: '900',
-  },
-  countBadge: {
-    color: '#171515',
-    backgroundColor: '#F4E7C5',
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  commentsContainer: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    padding: 12,
-    borderRadius: 24,
-    marginBottom: 10,
-    width: '100%',
+    padding: 18,
+    borderRadius: 26,
+    backgroundColor: 'rgba(160,113,202,0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    gap: 10,
+    borderColor: 'rgba(160,113,202,0.2)',
+    gap: 14,
   },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 26,
-    paddingHorizontal: 20,
-  },
-  emptyIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+  discussionIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(244,231,197,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(244,231,197,0.12)',
-    marginBottom: 12,
   },
-  emptyTitle: {
+  discussionTextWrap: {
+    flex: 1,
+  },
+  discussionTitle: {
+    fontSize: 17,
+    fontWeight: '800',
     color: '#FFF',
-    fontSize: 16,
-    fontWeight: '900',
-    marginBottom: 5,
   },
-  noCommentsText: { 
-    color: '#A9A0B8',
-    textAlign: 'center',
+  discussionSub: {
     fontSize: 13,
-    lineHeight: 18,
+    color: '#A9A0B8',
+    marginTop: 2,
+  },
+  overlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  overlayBg: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  sheet: {
+    backgroundColor: '#1E1B23',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: SCREEN_HEIGHT - 40,
+    minHeight: SCREEN_HEIGHT * 0.55,
+    paddingBottom: 50,
+  },
+  sheetBody: {
+    flex: 1,
+  },
+  handleBar: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  sheetTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#FFF',
+  },
+  listContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   commentContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: 'rgba(32,27,39,0.82)',
-    padding: 12,
-    borderRadius: 20,
-    width: '100%',
+    gap: 10,
+    paddingVertical: 10,
+  },
+  replyContainer: {
+    paddingVertical: 6,
+    gap: 8,
+  },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#2A2532',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
-  userPhoto: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    marginRight: 11,
-    backgroundColor: '#2A2532',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+  replyAvatar: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
   },
-  commentContent: {
+  commentBody: {
     flex: 1,
     minWidth: 0,
   },
-  commentHeader: {
+  commentHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   username: {
     color: '#F4E7C5',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  replyUsername: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  starRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(255,215,0,0.22)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.25)',
+  },
+  starText: {
+    color: '#FFD700',
+    fontSize: 11,
     fontWeight: '900',
-    marginBottom: 2,
-    flex: 1,
   },
   timestamp: {
     color: '#766E81',
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 'auto',
+  },
+  replyTimestamp: {
+    fontSize: 10,
   },
   commentText: {
     color: '#FFF',
     fontSize: 14,
-    lineHeight: 20,
-    marginTop: 4,
+    lineHeight: 19,
+    marginTop: 3,
   },
-  reactionsContainer: {
+  replyText: {
+    fontSize: 13,
+    lineHeight: 17,
+  },
+  commentActions: {
     flexDirection: 'row',
-    marginTop: 10,
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 6,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionText: {
+    color: '#A9A0B8',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  repliesContainer: {
+    marginTop: 6,
+    marginLeft: 56,
+    borderLeftWidth: 3,
+    borderLeftColor: 'rgba(160,113,202,0.35)',
+    paddingLeft: 16,
+    paddingBottom: 4,
+  },
+  threadDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#A071CA',
+    marginRight: 2,
+  },
+  viewRepliesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: 48,
+    marginTop: 2,
+    marginBottom: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+  },
+  hideRepliesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+  },
+  viewRepliesText: {
+    color: '#A071CA',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  deleteBtn: {
+    padding: 4,
+    marginLeft: 4,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 50,
+    gap: 10,
+  },
+  emptyTitle: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  emptySub: {
+    color: '#A9A0B8',
+    fontSize: 13,
+  },
+  loadingMore: {
+    textAlign: 'center',
+    color: '#888',
+    fontSize: 12,
+    paddingVertical: 16,
+  },
+  replyingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(160,113,202,0.1)',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
     gap: 8,
   },
-  reactionButton: {
+  replyingText: {
+    flex: 1,
+    color: '#A071CA',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  inputAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#2A2532',
+  },
+  input: {
+    flex: 1,
+    color: '#FFF',
+    fontSize: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.07)',
+    maxHeight: 80,
   },
-  activeLikeButton: {
-    backgroundColor: 'rgba(255,143,171,0.14)',
-  },
-  activeDislikeButton: {
-    backgroundColor: 'rgba(122,169,255,0.14)',
-  },
-  reactionText: {
-    color: '#D8D0E4',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  deleteButton: {
-    marginLeft: 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  sendButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#A071CA',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,143,171,0.1)',
   },
-  loadMoreButton: {
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderRadius: 16,
-    backgroundColor: 'rgba(244,231,197,0.1)',
-  },
-  loadMoreText: {
-    color: '#F4E7C5',
-    fontWeight: '900',
+  sendButtonDisabled: {
+    backgroundColor: 'rgba(160,113,202,0.3)',
   },
 });
