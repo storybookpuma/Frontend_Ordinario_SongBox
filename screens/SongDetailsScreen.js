@@ -63,9 +63,7 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
     queryKey: queryKeys.songDetails(songId),
     enabled: Boolean(songId && axiosInstance),
     queryFn: async () => {
-      const response = await axiosInstance.get('/song_details', {
-        params: { song_id: songId },
-      });
+      const response = await axiosInstance.get(`/mobile/entity/song/${encodeURIComponent(songId)}`);
       return response.data.song;
     },
   });

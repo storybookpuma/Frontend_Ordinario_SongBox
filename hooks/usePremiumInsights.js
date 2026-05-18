@@ -12,23 +12,8 @@ export const usePremiumInsights = () => {
     queryKey: queryKeys.premiumInsights(userId),
     enabled: Boolean(axiosInstance && userId),
     queryFn: async () => {
-      const [dashboardResult, profileResult] = await Promise.allSettled([
-        axiosInstance.get('/premium/listening-dashboard', { timeout: 12000 }),
-        axiosInstance.get('/premium/taste-profile', { timeout: 12000 }),
-      ]);
-
-      if (dashboardResult.status === 'rejected' && profileResult.status === 'rejected') {
-        throw dashboardResult.reason;
-      }
-
-      const dashboard = dashboardResult.status === 'fulfilled' ? dashboardResult.value.data : {};
-      const profile = profileResult.status === 'fulfilled' ? profileResult.value.data : {};
-      return {
-        ...dashboard,
-        isPartial: dashboardResult.status === 'rejected' || profileResult.status === 'rejected',
-        tasteProfile: profile.profile,
-        sync: profile.sync,
-      };
+      const response = await axiosInstance.get('/mobile/premium/insights', { timeout: 12000 });
+      return response.data;
     },
     retry: (failureCount, error) => {
       if (error?.response?.status === 403) return false;

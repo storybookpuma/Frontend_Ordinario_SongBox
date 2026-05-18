@@ -29,12 +29,17 @@ const DATA = [
   { label: "UTOPIA", title: "UTOPIA", artist: "Travis Scott", imageSource: require('../assets/travis.png') },
 ];
 
-const getHomeCacheKey = (userId) => `homeSpotifyFeed:v3:${userId}`;
-const getLegacyHomeCacheKey = (userId) => `homeSpotifyFeed:v2:${userId}`;
+const getHomeCacheKey = (userId) => `homeSpotifyFeed:v4:${userId}`;
+const getLegacyHomeCacheKeys = (userId) => [`homeSpotifyFeed:v3:${userId}`, `homeSpotifyFeed:v2:${userId}`];
 
 const readCachedHomeFeed = async (userId) => {
-  const cached = await AsyncStorage.getItem(getHomeCacheKey(userId))
-    || await AsyncStorage.getItem(getLegacyHomeCacheKey(userId));
+  let cached = await AsyncStorage.getItem(getHomeCacheKey(userId));
+  if (!cached) {
+    for (const key of getLegacyHomeCacheKeys(userId)) {
+      cached = await AsyncStorage.getItem(key);
+      if (cached) break;
+    }
+  }
   if (!cached) return null;
   return JSON.parse(cached);
 };
@@ -115,7 +120,7 @@ export default function HomeScreen({ navigation }) {
 
       let payload = {};
       try {
-        const response = await axiosInstance.get('/home/feed', { timeout: 12000 });
+        const response = await axiosInstance.get('/mobile/home', { timeout: 12000 });
         payload = response.data || {};
       } catch (error) {
         const cached = await readCachedHomeFeed(userId);
@@ -159,7 +164,7 @@ export default function HomeScreen({ navigation }) {
         throw new Error("axiosInstance no está definido en el contexto.");
       }
 
-      const response = await axiosInstance.get('/home/feed', { timeout: 12000 });
+      const response = await axiosInstance.get('/mobile/home', { timeout: 12000 });
       const payload = response.data || {};
 
       const albums = payload.albums || [];

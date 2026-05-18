@@ -73,9 +73,7 @@ const AlbumDetailsScreen = ({ route, navigation: navigationProp }) => {
     queryKey: queryKeys.albumDetails(album?.id),
     enabled: Boolean(album?.id && axiosInstance),
     queryFn: async () => {
-      const response = await axiosInstance.get('/album_details', {
-        params: { album_id: album?.id },
-      });
+      const response = await axiosInstance.get(`/mobile/entity/album/${encodeURIComponent(album?.id)}`);
       return response.data.album;
     },
   });

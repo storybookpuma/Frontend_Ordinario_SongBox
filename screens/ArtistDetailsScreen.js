@@ -62,9 +62,7 @@ const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
     queryKey: queryKeys.artistDetails(artistId),
     enabled: Boolean(artistId && axiosInstance),
     queryFn: async () => {
-      const response = await axiosInstance.get('/artist_details', {
-        params: { artist_id: artistId },
-      });
+      const response = await axiosInstance.get(`/mobile/entity/artist/${encodeURIComponent(artistId)}`);
       return response.data;
     },
   });
