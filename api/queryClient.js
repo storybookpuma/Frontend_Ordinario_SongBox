@@ -31,7 +31,7 @@ export const clearUserScopedQueryCache = async () => {
   await queryPersister.removeClient();
 
   const storageKeys = await AsyncStorage.getAllKeys();
-  const userScopedKeys = storageKeys.filter((key) => key.startsWith('homeSpotifyFeed:v2'));
+  const userScopedKeys = storageKeys.filter((key) => key.startsWith('homeSpotifyFeed:v'));
   if (userScopedKeys.length > 0) {
     await AsyncStorage.multiRemove(userScopedKeys);
   }

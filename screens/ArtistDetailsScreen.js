@@ -52,7 +52,7 @@ const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
   const userRatingQuery = useRating({
     entityType: 'artist',
     entityId: artistId,
-    enabled: Boolean(artistData?.artist?.id),
+    enabled: false,
     name: artistData?.artist?.name,
     image: artistData?.artist?.image,
     artist: artistData?.artist?.name,
@@ -79,6 +79,8 @@ const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
     setAverageRating(artistDetailsQuery.data.artist.averageRating || 0);
     setRatingCount(artistDetailsQuery.data.artist.ratingCount || 0);
     setRatingDistribution(artistDetailsQuery.data.artist.ratingDistribution || {});
+    setUserRating(artistDetailsQuery.data.artist.userRating || 0);
+    setIsFavorite(Boolean(artistDetailsQuery.data.artist.isFavorite));
   }, [artistDetailsQuery.data, artistId, showToast]);
 
   useEffect(() => {
@@ -97,12 +99,10 @@ const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
   }, [artistDetailsQuery.error, artistDetailsQuery.isError, showToast]);
 
   useEffect(() => {
-    setIsFavorite(favorites.some((fav) => fav.entityId === artistId && fav.entityType === 'artist'));
-  }, [artistId, favorites]);
-
-  useEffect(() => {
-    if (userRatingQuery.data) setUserRating(userRatingQuery.data);
-  }, [userRatingQuery.data]);
+    if (!artistDetailsQuery.data) {
+      setIsFavorite(favorites.some((fav) => fav.entityId === artistId && fav.entityType === 'artist'));
+    }
+  }, [artistDetailsQuery.data, artistId, favorites]);
 
   const handleToggleFavorite = async () => {
     const nextFavorite = !isFavorite;
@@ -334,6 +334,41 @@ const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
         </View>
 
         </Animated.ScrollView>
+
+        <Animated.View
+          style={[
+            styles.stickyHeader,
+            {
+              top: insets.top + 8,
+              opacity: scrollY.interpolate({
+                inputRange: [HEADER_MAX * 0.45, HEADER_MAX * 0.7],
+                outputRange: [0, 1],
+                extrapolate: 'clamp',
+              }),
+              transform: [{
+                translateY: scrollY.interpolate({
+                  inputRange: [HEADER_MAX * 0.45, HEADER_MAX * 0.7],
+                  outputRange: [-14, 0],
+                  extrapolate: 'clamp',
+                }),
+              }],
+            },
+          ]}
+        >
+          <TouchableOpacity style={styles.stickyBackButton} onPress={() => navigation.goBack()} activeOpacity={0.82}>
+            <Icon name="chevron-left" size={18} color="#FFF" />
+          </TouchableOpacity>
+          <Image
+            source={{ uri: artistData.artist.image }}
+            style={styles.stickyImage}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
+          <View style={styles.stickyTextWrap}>
+            <Text style={styles.stickyTitle} numberOfLines={1}>{artistData.artist.name}</Text>
+            <Text style={styles.stickySubtitle} numberOfLines={1}>{artistData.artist.genres?.slice(0, 3).join(' · ')}</Text>
+          </View>
+        </Animated.View>
     </View>
   );
 };
@@ -382,6 +417,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
+  },
+
+  stickyHeader: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(23,21,21,0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    gap: 10,
+    zIndex: 100,
+  },
+  stickyBackButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stickyImage: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+  },
+  stickyTextWrap: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  stickyTitle: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  stickySubtitle: {
+    color: '#BBA7FF',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 1,
   },
 
   header: {

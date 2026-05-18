@@ -23,6 +23,7 @@ import { AuthContext } from '../context/AuthContext';
 import LoadingScreen from '../components/LoadingScreen';
 import { SkeletonCard, SkeletonList } from '../components/Skeleton';
 import { queryKeys } from '../api/queryKeys';
+import { useFavorites } from '../hooks/useFavorites';
 import { getUserId, splitFavorites, resolveImageUrl } from '../utils/normalizers';
 import { useToast } from '../context/ToastContext';
 import { shareViewCapture } from '../utils/shareCapture';
@@ -50,6 +51,8 @@ export default function ProfileScreen({ navigation }) {
   const profileCaptureRef = useRef(null);
   const top3CaptureRef = useRef(null);
   const spotifySyncStarted = useRef(false);
+  const [shouldRenderProfileShare, setShouldRenderProfileShare] = useState(false);
+  const [shouldRenderTop3Share, setShouldRenderTop3Share] = useState(false);
 
   useEffect(() => {
     const refreshUser = async () => {
@@ -68,17 +71,7 @@ export default function ProfileScreen({ navigation }) {
     refreshUser();
   }, [axiosInstance, entityId, setUser, user]);
 
-  const {
-    data: favorites = [],
-    isLoading: isLoadingFavorites,
-  } = useQuery({
-    queryKey: queryKeys.favorites(entityId),
-    enabled: Boolean(entityId && axiosInstance),
-    queryFn: async () => {
-      const response = await axiosInstance.get('/get_favorites');
-      return response.data.favorites || [];
-    },
-  });
+  const { favorites, isLoading: isLoadingFavorites } = useFavorites();
 
   const { data: currentlyPlaying } = useSpotifyPlayback({ enabled: isFocused });
   const { data: badges = [] } = useBadges();
@@ -98,11 +91,15 @@ export default function ProfileScreen({ navigation }) {
   useEffect(() => {
     if (!isFocused || !user?.spotify_connected || !axiosInstance || spotifySyncStarted.current) return;
     spotifySyncStarted.current = true;
-    axiosInstance.post('/spotify/sync')
-      .then(() => refetchTasteWall())
-      .catch(() => {
-        spotifySyncStarted.current = false;
-      });
+    const syncTimer = setTimeout(() => {
+      axiosInstance.post('/spotify/sync')
+        .then(() => refetchTasteWall())
+        .catch(() => {
+          spotifySyncStarted.current = false;
+        });
+    }, 900);
+
+    return () => clearTimeout(syncTimer);
   }, [axiosInstance, isFocused, refetchTasteWall, user?.spotify_connected]);
 
   const {
@@ -124,11 +121,15 @@ export default function ProfileScreen({ navigation }) {
 
   const handleShareProfile = useCallback(async () => {
     try {
+      if (!shouldRenderProfileShare) {
+        setShouldRenderProfileShare(true);
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
       await shareViewCapture(profileCaptureRef, `songbox-profile-${user?.username || 'user'}`);
     } catch (_error) {
       showToast('No se pudo compartir la captura del perfil.');
     }
-  }, [showToast, user?.username]);
+  }, [shouldRenderProfileShare, showToast, user?.username]);
 
   const top3Items = useMemo(() => {
     const all = [
@@ -141,11 +142,15 @@ export default function ProfileScreen({ navigation }) {
 
   const handleShareTop3 = useCallback(async () => {
     try {
+      if (!shouldRenderTop3Share) {
+        setShouldRenderTop3Share(true);
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
       await shareViewCapture(top3CaptureRef, `songbox-top3-${user?.username || 'user'}`);
     } catch (_error) {
       showToast('No se pudo compartir el Top 3.');
     }
-  }, [showToast, user?.username]);
+  }, [shouldRenderTop3Share, showToast, user?.username]);
 
   const tasteWall = useMemo(() => {
     const totalFavorites = favorites.length;
@@ -254,7 +259,7 @@ export default function ProfileScreen({ navigation }) {
         navigation.navigate('AlbumDetailsScreen', { albumId: item.entityId });
       }}
     >
-      <Image source={{ uri: item.image }} style={styles.albumImage} />
+      <Image source={{ uri: item.image }} style={styles.albumImage} contentFit="cover" cachePolicy="memory-disk" />
       <Text style={styles.albumTitle}>{item.name}</Text>
     </TouchableOpacity>
   ), [navigation]);
@@ -266,7 +271,7 @@ export default function ProfileScreen({ navigation }) {
         navigation.navigate('SongDetailsScreen', { songId: item.entityId });
       }}
     >
-      <Image source={{ uri: item.image }} style={styles.songImage} />
+      <Image source={{ uri: item.image }} style={styles.songImage} contentFit="cover" cachePolicy="memory-disk" />
       <View style={styles.songInfo}>
         <Text style={styles.songTitle}>{item.name}</Text>
       </View>
@@ -280,7 +285,7 @@ export default function ProfileScreen({ navigation }) {
         navigation.navigate('ArtistDetailsScreen', { artistId: item.entityId });
       }}
     >
-      <Image source={{ uri: item.image }} style={styles.albumImage} />
+      <Image source={{ uri: item.image }} style={styles.albumImage} contentFit="cover" cachePolicy="memory-disk" />
       <Text style={styles.albumTitle}>{item.name}</Text>
     </TouchableOpacity>
   ), [navigation]);
@@ -434,24 +439,28 @@ export default function ProfileScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-        <View ref={profileCaptureRef} collapsable={false} style={styles.profileShareCaptureWrap}>
-          <ProfileShareCard
-            username={user?.username || 'SongBox listener'}
-            profileImageSource={profileImageSource}
-            favoriteAlbums={favoriteAlbums.length}
-            favoriteArtists={favoriteArtists.length}
-            favoriteSongs={favoriteSongs.length}
-            following={followingIds.length}
-          />
-        </View>
+        {shouldRenderProfileShare ? (
+          <View ref={profileCaptureRef} collapsable={false} style={styles.profileShareCaptureWrap}>
+            <ProfileShareCard
+              username={user?.username || 'SongBox listener'}
+              profileImageSource={profileImageSource}
+              favoriteAlbums={favoriteAlbums.length}
+              favoriteArtists={favoriteArtists.length}
+              favoriteSongs={favoriteSongs.length}
+              following={followingIds.length}
+            />
+          </View>
+        ) : null}
 
-        <View ref={top3CaptureRef} collapsable={false} style={styles.profileShareCaptureWrap}>
-          <Top3ShareCard
-            username={user?.username || 'SongBox listener'}
-            profileImageSource={profileImageSource}
-            items={top3Items}
-          />
-        </View>
+        {shouldRenderTop3Share ? (
+          <View ref={top3CaptureRef} collapsable={false} style={styles.profileShareCaptureWrap}>
+            <Top3ShareCard
+              username={user?.username || 'SongBox listener'}
+              profileImageSource={profileImageSource}
+              items={top3Items}
+            />
+          </View>
+        ) : null}
         <TouchableOpacity 
           style={styles.logoutButton} 
           onPress={() => navigation.navigate('SettingsScreen')}
@@ -502,6 +511,10 @@ export default function ProfileScreen({ navigation }) {
             contentContainerStyle={styles.listContainer}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
+            initialNumToRender={6}
+            maxToRenderPerBatch={6}
+            windowSize={7}
+            removeClippedSubviews={Platform.OS === 'android'}
             onScroll={Animated.event(
               [{ nativeEvent: { contentOffset: { y: scrollY } } }],
               { useNativeDriver: true }
@@ -569,6 +582,10 @@ const FavoriteCarouselSection = React.memo(function FavoriteCarouselSection({ ti
           snapToAlignment="center"
           snapToInterval={180}
           decelerationRate="fast"
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
         />
       )}
     </>
@@ -594,6 +611,10 @@ const FollowingSection = React.memo(function FollowingSection({ followingCount, 
           snapToAlignment="center"
           snapToInterval={180}
           decelerationRate="fast"
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
         />
       )}
     </>

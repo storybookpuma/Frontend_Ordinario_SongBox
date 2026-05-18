@@ -8,6 +8,7 @@ import {
   Animated,
   Platform,
   Keyboard,
+  InteractionManager,
 } from 'react-native';
 import { Image } from 'expo-image';
 
@@ -28,6 +29,7 @@ export default function UserDetailsScreen({ route, navigation }) {
   const { axiosInstance, user } = useContext(AuthContext);
   const { showToast } = useToast();
   const [profileData, setProfileData] = useState(null);
+  const [shouldLoadCompatibility, setShouldLoadCompatibility] = useState(false);
   const commentRef = useRef(null);
   
   const entityId = profileId; 
@@ -52,13 +54,21 @@ export default function UserDetailsScreen({ route, navigation }) {
     },
   });
 
-  const { data: compatibility } = useProfileCompatibility(profileId);
+  const { data: compatibility } = useProfileCompatibility(profileId, { enabled: shouldLoadCompatibility });
 
   useEffect(() => {
     if (profileQuery.data) {
       setProfileData(profileQuery.data);
       setError(null);
     }
+  }, [profileQuery.data]);
+
+  useEffect(() => {
+    if (!profileQuery.data) return undefined;
+    const task = InteractionManager.runAfterInteractions(() => {
+      setShouldLoadCompatibility(true);
+    });
+    return () => task.cancel();
   }, [profileQuery.data]);
 
   useEffect(() => {

@@ -53,7 +53,7 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
   const userRatingQuery = useRating({
     entityType: 'song',
     entityId: songId,
-    enabled: Boolean(songData),
+    enabled: false,
     name: songData?.name,
     image: songData?.cover_image,
     artist: songData?.artists?.join(', '),
@@ -83,6 +83,8 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
     setAverageRating(songDetailsQuery.data.averageRating || 0);
     setRatingCount(songDetailsQuery.data.ratingCount || 0);
     setRatingDistribution(songDetailsQuery.data.ratingDistribution || {});
+    setUserRating(songDetailsQuery.data.userRating || 0);
+    setIsFavorite(Boolean(songDetailsQuery.data.isFavorite));
   }, [songDetailsQuery.data]);
 
   useEffect(() => {
@@ -101,12 +103,10 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
   }, [showToast, songDetailsQuery.error, songDetailsQuery.isError]);
 
   useEffect(() => {
-    setIsFavorite(favorites.some((fav) => fav.entityId === songId && fav.entityType === 'song'));
-  }, [favorites, songId]);
-
-  useEffect(() => {
-    if (userRatingQuery.data) setUserRating(userRatingQuery.data);
-  }, [userRatingQuery.data]);
+    if (!songDetailsQuery.data) {
+      setIsFavorite(favorites.some((fav) => fav.entityId === songId && fav.entityType === 'song'));
+    }
+  }, [favorites, songDetailsQuery.data, songId]);
 
   const handleToggleFavorite = async () => {
     const nextFavorite = !isFavorite;
@@ -351,6 +351,41 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
         </View>
 
         </Animated.ScrollView>
+
+        <Animated.View
+          style={[
+            styles.stickyHeader,
+            {
+              top: insets.top + 8,
+              opacity: scrollY.interpolate({
+                inputRange: [HEADER_MAX * 0.45, HEADER_MAX * 0.7],
+                outputRange: [0, 1],
+                extrapolate: 'clamp',
+              }),
+              transform: [{
+                translateY: scrollY.interpolate({
+                  inputRange: [HEADER_MAX * 0.45, HEADER_MAX * 0.7],
+                  outputRange: [-14, 0],
+                  extrapolate: 'clamp',
+                }),
+              }],
+            },
+          ]}
+        >
+          <TouchableOpacity style={styles.stickyBackButton} onPress={() => navigation.goBack()} activeOpacity={0.82}>
+            <Icon name="chevron-left" size={18} color="#FFF" />
+          </TouchableOpacity>
+          <Image
+            source={{ uri: songData.cover_image }}
+            style={styles.stickyImage}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
+          <View style={styles.stickyTextWrap}>
+            <Text style={styles.stickyTitle} numberOfLines={1}>{songData.name}</Text>
+            <Text style={styles.stickySubtitle} numberOfLines={1}>{songData.artists.join(', ')}</Text>
+          </View>
+        </Animated.View>
     </View>
   );
 }
@@ -399,6 +434,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
+  },
+
+  stickyHeader: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(23,21,21,0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    gap: 10,
+    zIndex: 100,
+  },
+  stickyBackButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stickyImage: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+  },
+  stickyTextWrap: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  stickyTitle: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  stickySubtitle: {
+    color: '#BBA7FF',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 1,
   },
 
   header: {

@@ -3,6 +3,7 @@ import {
   View,
   Text,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   StyleSheet,
   Animated,
@@ -18,8 +19,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SkeletonCard, SkeletonList } from '../components/Skeleton';
 import { getUserId, normalizeAlbum, normalizeArtist, normalizeSong, resolveImageUrl } from '../utils/normalizers';
 import { queryKeys } from '../api/queryKeys';
-import { useCharts } from '../hooks/useCharts';
-import { useActivity } from '../hooks/useActivity';
 import { useToast } from '../context/ToastContext';
 import { openYouTubeUrl } from '../utils/externalLinks';
 
@@ -30,7 +29,7 @@ const DATA = [
   { label: "UTOPIA", title: "UTOPIA", artist: "Travis Scott", imageSource: require('../assets/travis.png') },
 ];
 
-const getHomeCacheKey = (userId) => `homeSpotifyFeed:v2:${userId}`;
+const getHomeCacheKey = (userId) => `homeSpotifyFeed:v3:${userId}`;
 
 const formatAlbum = (album) => {
   const normalizedAlbum = normalizeAlbum(album);
@@ -86,6 +85,8 @@ export default function HomeScreen({ navigation }) {
   const [videosData, setVideosData] = useState([]);
   const [moreAlbumsData, setMoreAlbumsData] = useState([]);
   const [moreArtistsData, setMoreArtistsData] = useState([]);
+  const [topRatedData, setTopRatedData] = useState([]);
+  const [activityData, setActivityData] = useState([]);
   const [isFetchingHome, setIsFetchingHome] = useState(false);
   const [tabData, setTabData] = useState([]);
   const carouselRef = useRef();
@@ -96,9 +97,6 @@ export default function HomeScreen({ navigation }) {
   const carouselIndexRef = useRef(0);
   const isUserInteractingCarousel = useRef(false);
 
-  const chartsQuery = useCharts({ entityType: 'song', limit: 10 });
-  const activityQuery = useActivity({ limit: 10 });
-
   const homeFeedQuery = useQuery({
     queryKey: queryKeys.homeFeed(userId),
     enabled: Boolean(userId && axiosInstance),
@@ -107,21 +105,18 @@ export default function HomeScreen({ navigation }) {
         throw new Error("axiosInstance no está definido en el contexto.");
       }
 
-      const [albumsResult, artistsResult, recentlyListenedResult, moreAlbumsResult, moreArtistsResult] = await Promise.allSettled([
-        axiosInstance.get('/top_albums_global', { params: { limit: 20, offset: 0 } }),
-        axiosInstance.get('/top_artists_global', { params: { limit: 20, offset: 0 } }),
-        axiosInstance.get('/recently_listened'),
-        axiosInstance.get('/top_albums_global', { params: { limit: 20, offset: 20 } }),
-        axiosInstance.get('/top_artists_global', { params: { limit: 20, offset: 20 } }),
-      ]);
+      const response = await axiosInstance.get('/home/feed');
+      const payload = response.data || {};
 
       const homeFeed = {
-        newsData: (albumsResult.status === 'fulfilled' ? albumsResult.value.data.albums : []).map(formatAlbum),
-        artistsData: (artistsResult.status === 'fulfilled' ? artistsResult.value.data.artists : []).map(formatArtist),
+        newsData: (payload.albums || []).map(formatAlbum),
+        artistsData: (payload.artists || []).map(formatArtist),
         videosData: [],
-        recentlyListenedData: (recentlyListenedResult.status === 'fulfilled' ? recentlyListenedResult.value.data.songs : []).map(formatSong),
-        moreAlbumsData: (moreAlbumsResult.status === 'fulfilled' ? moreAlbumsResult.value.data.albums : []).map(formatAlbum),
-        moreArtistsData: (moreArtistsResult.status === 'fulfilled' ? moreArtistsResult.value.data.artists : []).map(formatArtist),
+        recentlyListenedData: (payload.recentlyListened || []).map(formatSong),
+        moreAlbumsData: (payload.moreAlbums || []).map(formatAlbum),
+        moreArtistsData: (payload.moreArtists || []).map(formatArtist),
+        topRated: payload.topRated || [],
+        activity: payload.activity || [],
         cachedAt: Date.now(),
       };
 
@@ -138,6 +133,8 @@ export default function HomeScreen({ navigation }) {
     setRecentlyListenedData(homeFeedQuery.data.recentlyListenedData || []);
     setMoreAlbumsData(homeFeedQuery.data.moreAlbumsData || []);
     setMoreArtistsData(homeFeedQuery.data.moreArtistsData || []);
+    setTopRatedData(homeFeedQuery.data.topRated || []);
+    setActivityData(homeFeedQuery.data.activity || []);
   }, [homeFeedQuery.data]);
 
   const fetchData = useCallback(async () => {
@@ -147,21 +144,14 @@ export default function HomeScreen({ navigation }) {
         throw new Error("axiosInstance no está definido en el contexto.");
       }
 
-      const [albumsResult, artistsResult, recentlyListenedResult, moreAlbumsResult, moreArtistsResult] = await Promise.allSettled([
-        axiosInstance.get('/top_albums_global', { params: { limit: 20, offset: 0 } }),
-        axiosInstance.get('/top_artists_global', { params: { limit: 20, offset: 0 } }),
-        axiosInstance.get('/recently_listened'),
-        axiosInstance.get('/top_albums_global', { params: { limit: 20, offset: 20 } }),
-        axiosInstance.get('/top_artists_global', { params: { limit: 20, offset: 20 } }),
-      ]);
+      const response = await axiosInstance.get('/home/feed');
+      const payload = response.data || {};
 
-      const albums = albumsResult.status === 'fulfilled' ? albumsResult.value.data.albums : [];
-      const artists = artistsResult.status === 'fulfilled' ? artistsResult.value.data.artists : [];
-      const recentlyListened = recentlyListenedResult.status === 'fulfilled'
-        ? recentlyListenedResult.value.data.songs
-        : [];
-      const moreAlbums = moreAlbumsResult.status === 'fulfilled' ? moreAlbumsResult.value.data.albums : [];
-      const moreArtists = moreArtistsResult.status === 'fulfilled' ? moreArtistsResult.value.data.artists : [];
+      const albums = payload.albums || [];
+      const artists = payload.artists || [];
+      const recentlyListened = payload.recentlyListened || [];
+      const moreAlbums = payload.moreAlbums || [];
+      const moreArtists = payload.moreArtists || [];
 
       const formattedNewsData = albums.map(formatAlbum);
       setNewsData(formattedNewsData);
@@ -184,6 +174,8 @@ export default function HomeScreen({ navigation }) {
         recentlyListenedData: formattedRecentlyListened,
         moreAlbumsData: formattedMoreAlbumsData,
         moreArtistsData: formattedMoreArtistsData,
+        topRated: payload.topRated || [],
+        activity: payload.activity || [],
         cachedAt: Date.now(),
       }));
 
@@ -210,6 +202,8 @@ export default function HomeScreen({ navigation }) {
           setRecentlyListenedData(parsedCache.recentlyListenedData || []);
           setMoreAlbumsData(parsedCache.moreAlbumsData || []);
           setMoreArtistsData(parsedCache.moreArtistsData || []);
+          setTopRatedData(parsedCache.topRated || []);
+          setActivityData(parsedCache.activity || []);
         }
       } catch (_error) {
         showToast("Hubo un problema al inicializar la aplicación. Intenta nuevamente.");
@@ -333,9 +327,18 @@ export default function HomeScreen({ navigation }) {
       {(isFetchingHome || homeFeedQuery.isFetching) && data.length === 0 ? (
         renderCardSkeletonRow()
       ) : data.length > 0 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.extraSectionList}>
-          {data.map(renderItem)}
-        </ScrollView>
+        <FlatList
+          horizontal
+          data={data}
+          renderItem={({ item, index }) => renderItem(item, index)}
+          keyExtractor={(item, index) => `${item.id || item.entityId || item.title || item.name}-${index}`}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.extraSectionList}
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          windowSize={5}
+          removeClippedSubviews={false}
+        />
       ) : (
         <Text style={styles.emptySectionText}>{emptyText}</Text>
       )}
@@ -509,11 +512,11 @@ export default function HomeScreen({ navigation }) {
         {/* Top Rated Charts */}
         <View style={styles.extraSection}>
           <Text style={styles.sectionTitle}>Top Rated</Text>
-          {chartsQuery.isLoading ? (
+          {homeFeedQuery.isFetching && topRatedData.length === 0 ? (
             renderCardSkeletonRow()
-          ) : chartsQuery.data?.length > 0 ? (
+          ) : topRatedData.length > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.extraSectionList}>
-              {chartsQuery.data.map((item, index) => (
+              {topRatedData.map((item, index) => (
                 <TouchableOpacity
                   key={`chart-${item.entityId || index}`}
                   style={styles.chartCard}
@@ -553,11 +556,11 @@ export default function HomeScreen({ navigation }) {
         {/* Activity Feed */}
         <View style={styles.extraSection}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
-          {activityQuery.isLoading ? (
+          {homeFeedQuery.isFetching && activityData.length === 0 ? (
             <SkeletonList count={3} itemStyle={styles.activitySkeletonItem} />
-          ) : activityQuery.data?.length > 0 ? (
+          ) : activityData.length > 0 ? (
             <View style={styles.activityList}>
-              {activityQuery.data.slice(0, 5).map((activity, index) => (
+              {activityData.slice(0, 5).map((activity, index) => (
                 <TouchableOpacity
                   key={`activity-${index}`}
                   style={styles.activityItem}
