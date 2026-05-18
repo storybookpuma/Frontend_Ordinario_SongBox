@@ -30,6 +30,14 @@ const DATA = [
 ];
 
 const getHomeCacheKey = (userId) => `homeSpotifyFeed:v3:${userId}`;
+const getLegacyHomeCacheKey = (userId) => `homeSpotifyFeed:v2:${userId}`;
+
+const readCachedHomeFeed = async (userId) => {
+  const cached = await AsyncStorage.getItem(getHomeCacheKey(userId))
+    || await AsyncStorage.getItem(getLegacyHomeCacheKey(userId));
+  if (!cached) return null;
+  return JSON.parse(cached);
+};
 
 const formatAlbum = (album) => {
   const normalizedAlbum = normalizeAlbum(album);
@@ -105,8 +113,15 @@ export default function HomeScreen({ navigation }) {
         throw new Error("axiosInstance no está definido en el contexto.");
       }
 
-      const response = await axiosInstance.get('/home/feed');
-      const payload = response.data || {};
+      let payload = {};
+      try {
+        const response = await axiosInstance.get('/home/feed', { timeout: 12000 });
+        payload = response.data || {};
+      } catch (error) {
+        const cached = await readCachedHomeFeed(userId);
+        if (cached) return { ...cached, isStaleFallback: true };
+        throw error;
+      }
 
       const homeFeed = {
         newsData: (payload.albums || []).map(formatAlbum),
@@ -144,7 +159,7 @@ export default function HomeScreen({ navigation }) {
         throw new Error("axiosInstance no está definido en el contexto.");
       }
 
-      const response = await axiosInstance.get('/home/feed');
+      const response = await axiosInstance.get('/home/feed', { timeout: 12000 });
       const payload = response.data || {};
 
       const albums = payload.albums || [];
@@ -192,10 +207,10 @@ export default function HomeScreen({ navigation }) {
         if (!user) {
           return;
         }
-        const cachedHomeFeed = await AsyncStorage.getItem(homeCacheKey);
+        const cachedHomeFeed = await readCachedHomeFeed(userId);
 
         if (cachedHomeFeed) {
-          const parsedCache = JSON.parse(cachedHomeFeed);
+          const parsedCache = cachedHomeFeed;
           setNewsData(parsedCache.newsData || []);
           setArtistsData(parsedCache.artistsData || []);
           setVideosData(parsedCache.videosData || []);
@@ -211,7 +226,7 @@ export default function HomeScreen({ navigation }) {
     };
 
     initialize();
-  }, [fetchData, homeCacheKey, user, showToast]);
+  }, [fetchData, homeCacheKey, user, userId, showToast]);
 
   useEffect(() => {
     if (activeTab === "News") {

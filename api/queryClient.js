@@ -23,7 +23,7 @@ export const queryClient = new QueryClient({
 
 export const queryPersister = createAsyncStoragePersister({
   storage: AsyncStorage,
-  key: 'songbox-react-query-cache',
+  key: 'songbox-react-query-cache:v2',
 });
 
 export const clearUserScopedQueryCache = async () => {
@@ -38,6 +38,7 @@ export const clearUserScopedQueryCache = async () => {
 };
 
 export const shouldPersistQuery = (query) => {
+  if (query.state.status !== 'success') return false;
   const [scope] = query.queryKey;
-  return ['homeFeed', 'favorites', 'albumDetails', 'artistDetails', 'songDetails', 'profileDetails', 'userRating', 'premiumInsights'].includes(scope);
+  return ['homeFeed', 'favorites', 'albumDetails', 'artistDetails', 'songDetails', 'profileDetails', 'userRating'].includes(scope);
 };
