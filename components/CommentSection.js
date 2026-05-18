@@ -10,9 +10,14 @@ import {
   Modal,
   Animated,
   Dimensions,
-  Alert,
+  Easing,
+  Platform,
+  Pressable,
+  Share,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { BlurView } from 'expo-blur';
+import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
@@ -46,7 +51,7 @@ const StarRatingMini = ({ rating }) => {
   );
 };
 
-function CommentRow({ comment, userId, onLike, onReply, onDelete, currentUserRating, isReply = false }) {
+function CommentRow({ comment, rootComment, userId, onLike, onReply, onOpenMenu, currentUserRating, isReply = false }) {
   const [liked, setLiked] = useState(Boolean(userId && comment.liked_by?.includes(userId)));
   const [localLikes, setLocalLikes] = useState(comment.likes || 0);
   const isOwner = userId && String(comment.user_id) === String(userId);
@@ -66,7 +71,11 @@ function CommentRow({ comment, userId, onLike, onReply, onDelete, currentUserRat
   };
 
   return (
-    <View style={[styles.commentContainer, isReply && styles.replyContainer]}>
+    <Pressable
+      style={[styles.commentContainer, isReply && styles.replyContainer]}
+      onLongPress={(event) => onOpenMenu(comment, event.nativeEvent)}
+      delayLongPress={260}
+    >
       <Image
         source={avatarUrl ? { uri: avatarUrl } : require('../assets/default_picture.png')}
         style={[styles.avatar, isReply && styles.replyAvatar]}
@@ -80,22 +89,71 @@ function CommentRow({ comment, userId, onLike, onReply, onDelete, currentUserRat
         </View>
         <Text style={[styles.commentText, isReply && styles.replyText]}>{comment.comment_text}</Text>
         <View style={styles.commentActions}>
-          <TouchableOpacity onPress={handleLike} style={styles.actionButton} hitSlop={8}>
-            <Icon name={liked ? 'heart' : 'heart-o'} size={12} color={liked ? '#FF8FAB' : '#A9A0B8'} />
-            <Text style={[styles.actionText, liked && { color: '#FF8FAB' }]}>{localLikes > 0 ? localLikes : ''}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => onReply(comment)} style={styles.actionButton} hitSlop={8}>
+          <TouchableOpacity onPress={() => onReply(comment, rootComment || comment)} style={styles.actionButton} hitSlop={8}>
             <Icon name="reply" size={11} color="#A9A0B8" />
-            <Text style={styles.actionText}>Reply</Text>
+            <Text style={styles.actionText}>Responder</Text>
           </TouchableOpacity>
         </View>
       </View>
+      <TouchableOpacity onPress={handleLike} style={styles.trailingLike} hitSlop={8}>
+        <Icon name={liked ? 'heart' : 'heart-o'} size={22} color={liked ? '#FF8FAB' : '#8F8998'} />
+        {localLikes > 0 ? <Text style={[styles.likeCount, liked && { color: '#FF8FAB' }]}>{localLikes}</Text> : null}
+      </TouchableOpacity>
+    </Pressable>
+  );
+}
+
+function CommentActionMenu({ visible, comment, userId, menuY, onClose, onDelete }) {
+  const canUseLiquidGlass = Platform.OS === 'ios' && isGlassEffectAPIAvailable();
+  const isOwner = userId && comment && String(comment.user_id) === String(userId);
+
+  const handleShare = async () => {
+    if (!comment) return;
+    await Share.share({
+      message: `${comment.username || 'SongBox user'}: ${comment.comment_text}`,
+    });
+    onClose();
+  };
+
+  const handleDelete = () => {
+    if (!comment) return;
+    onClose();
+    onDelete(comment._id);
+  };
+
+  const menuContent = (
+    <View style={styles.actionMenuContent}>
+      <Pressable style={styles.actionMenuItem} onPress={handleShare}>
+        <Icon name="paper-plane-o" size={21} color="#FFFFFF" />
+        <Text style={styles.actionMenuText}>Compartir</Text>
+      </Pressable>
       {isOwner && (
-        <TouchableOpacity onPress={() => onDelete(comment._id)} style={styles.deleteBtn} hitSlop={8}>
-          <Icon name="trash-o" size={12} color="#FF8FAB" />
-        </TouchableOpacity>
+        <Pressable style={styles.actionMenuItem} onPress={handleDelete}>
+          <Icon name="trash-o" size={23} color="#FF5A66" />
+          <Text style={[styles.actionMenuText, styles.actionMenuDeleteText]}>Eliminar</Text>
+        </Pressable>
       )}
     </View>
+  );
+
+  if (!visible) return null;
+
+  const top = Math.max(120, Math.min(menuY + 18, SCREEN_HEIGHT - 260));
+
+  return (
+    <Pressable style={styles.actionMenuOverlay} onPress={onClose}>
+      <Pressable style={[styles.actionMenuShell, { top }]}>
+        {canUseLiquidGlass ? (
+          <GlassView glassEffectStyle="regular" colorScheme="dark" isInteractive style={styles.actionMenuSurface}>
+            {menuContent}
+          </GlassView>
+        ) : (
+          <BlurView intensity={Platform.OS === 'ios' ? 72 : 44} tint="dark" style={styles.actionMenuSurface}>
+            {menuContent}
+          </BlurView>
+        )}
+      </Pressable>
+    </Pressable>
   );
 }
 
@@ -106,6 +164,9 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
   const [modalVisible, setModalVisible] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
+  const [selectedComment, setSelectedComment] = useState(null);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [menuY, setMenuY] = useState(SCREEN_HEIGHT * 0.45);
   const [expandedReplies, setExpandedReplies] = useState({});
   const [replyData, setReplyData] = useState({});
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -153,11 +214,12 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
       setReplyingTo(null);
       Keyboard.dismiss();
       if (variables.parentId) {
+        const rootId = variables.rootId || variables.parentId;
         setReplyData((current) => ({
           ...current,
-          [variables.parentId]: [...(current[variables.parentId] || []), createdComment],
+          [rootId]: [...(current[rootId] || []), createdComment],
         }));
-        setExpandedReplies((current) => ({ ...current, [variables.parentId]: true }));
+        setExpandedReplies((current) => ({ ...current, [rootId]: true }));
         queryClient.setQueryData(queryKey, (current) => {
           if (!current?.pages) return current;
           return {
@@ -165,7 +227,7 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
             pages: current.pages.map((page) => ({
               ...page,
               comments: (page.comments || []).map((comment) => (
-                comment._id === variables.parentId
+                comment._id === rootId
                   ? { ...comment, reply_count: (comment.reply_count || 0) + 1 }
                   : comment
               )),
@@ -214,10 +276,10 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
 
   const openModal = useCallback(() => {
     setModalVisible(true);
-    Animated.spring(slideAnim, {
+    Animated.timing(slideAnim, {
       toValue: 0,
-      friction: 9,
-      tension: 65,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
   }, [slideAnim]);
@@ -227,7 +289,8 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
   const closeModal = () => {
     Animated.timing(slideAnim, {
       toValue: SCREEN_HEIGHT,
-      duration: 200,
+      duration: 210,
+      easing: Easing.in(Easing.cubic),
       useNativeDriver: true,
     }).start(() => {
       setModalVisible(false);
@@ -254,11 +317,12 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
 
   const handlePost = () => {
     const text = commentText.trim();
-    if (!text) {
+    const replyTag = replyingTo?.target?.username ? `@${replyingTo.target.username}` : '';
+    if (!text || (replyTag && text === replyTag)) {
       showToast('El comentario no puede estar vacío.');
       return;
     }
-    postMutation.mutate({ text, parentId: replyingTo?._id });
+    postMutation.mutate({ text, parentId: replyingTo?.root?._id, rootId: replyingTo?.root?._id });
   };
 
   const handleLike = (commentId) => {
@@ -266,20 +330,33 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
   };
 
   const handleDelete = (commentId) => {
-    Alert.alert('Eliminar comentario', 'Esta acción no se puede deshacer.', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: () => deleteMutation.mutate(commentId) },
-    ]);
+    deleteMutation.mutate(commentId);
   };
 
-  const handleReply = (comment) => {
-    setReplyingTo(comment);
+  const handleReply = (comment, rootComment = comment) => {
+    const tag = comment.username ? `@${comment.username} ` : '';
+    setReplyingTo({ target: comment, root: rootComment });
+    setCommentText((current) => current.trim() ? current : tag);
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
   const cancelReply = () => {
     setReplyingTo(null);
-    Keyboard.dismiss();
+    setCommentText((current) => {
+      const tag = replyingTo?.target?.username ? `@${replyingTo.target.username} ` : '';
+      return current === tag ? '' : current;
+    });
+  };
+
+  const openActionMenu = (comment, nativeEvent) => {
+    setSelectedComment(comment);
+    setMenuY(nativeEvent?.pageY || SCREEN_HEIGHT * 0.45);
+    setMenuVisible(true);
+  };
+
+  const closeActionMenu = () => {
+    setMenuVisible(false);
+    setSelectedComment(null);
   };
 
   const toggleReplies = async (commentId) => {
@@ -301,6 +378,7 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
 
   const count = commentsQuery.data?.pages?.[0]?.pagination?.total_comments ?? 0;
   const isInitialLoading = commentsQuery.isLoading;
+  const shouldHideEmptyState = keyboardHeight > 0 || commentText.trim().length > 0;
 
   return (
     <>
@@ -336,11 +414,13 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
                 <Text style={styles.emptyTitle}>Loading...</Text>
               </View>
             ) : comments.length === 0 ? (
+              shouldHideEmptyState ? <View style={styles.emptyKeyboardSpacer} /> : (
               <View style={styles.emptyState}>
                 <Icon name="comment-o" size={28} color="#F4E7C5" />
                 <Text style={styles.emptyTitle}>Sin reseñas aún</Text>
                 <Text style={styles.emptySub}>Sé el primero en compartir tu opinión.</Text>
               </View>
+              )
             ) : (
               <FlatList
                 style={{ flex: 1 }}
@@ -355,7 +435,7 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
                       userId={user?.id}
                       onLike={handleLike}
                       onReply={handleReply}
-                      onDelete={handleDelete}
+                      onOpenMenu={openActionMenu}
                       currentUserRating={userRating}
                     />
                     {item.reply_count > 0 && !expandedReplies[item._id] && (
@@ -376,10 +456,11 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
                           <CommentRow
                             key={reply._id}
                             comment={reply}
+                            rootComment={item}
                             userId={user?.id}
                             onLike={handleLike}
                             onReply={handleReply}
-                            onDelete={handleDelete}
+                            onOpenMenu={openActionMenu}
                             currentUserRating={userRating}
                             isReply
                           />
@@ -412,7 +493,7 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
             {replyingTo && (
               <View style={styles.replyingBar}>
                 <Text style={styles.replyingText} numberOfLines={1}>
-                  Respondiendo a @{replyingTo.username}
+                  Respondiendo a @{replyingTo.target?.username || 'usuario'}
                 </Text>
                 <TouchableOpacity onPress={cancelReply} hitSlop={8}>
                   <Icon name="times" size={14} color="#A071CA" />
@@ -432,7 +513,7 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
               <TextInput
                 ref={inputRef}
                 style={styles.input}
-                placeholder={replyingTo ? 'Escribe una respuesta...' : 'Agrega una reseña...'}
+                placeholder={replyingTo ? `Responde a @${replyingTo.target?.username || 'usuario'}...` : 'Agrega una reseña...'}
                 placeholderTextColor="#888"
                 value={commentText}
                 onChangeText={setCommentText}
@@ -449,6 +530,14 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
               </TouchableOpacity>
             </View>
           </Animated.View>
+          <CommentActionMenu
+            visible={menuVisible}
+            comment={selectedComment}
+            userId={user?.id}
+            menuY={menuY}
+            onClose={closeActionMenu}
+            onDelete={handleDelete}
+          />
         </View>
       </Modal>
     </>
@@ -628,6 +717,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  trailingLike: {
+    width: 34,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 9,
+    marginLeft: 2,
+  },
+  likeCount: {
+    color: '#8F8998',
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: 3,
+    fontVariant: ['tabular-nums'],
+  },
   repliesContainer: {
     marginTop: 6,
     marginLeft: 56,
@@ -670,14 +773,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  deleteBtn: {
-    padding: 4,
-    marginLeft: 4,
-  },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 50,
+    paddingTop: 58,
+    paddingBottom: 24,
     gap: 10,
+  },
+  emptyKeyboardSpacer: {
+    flex: 1,
   },
   emptyTitle: {
     color: '#FFF',
@@ -745,5 +848,50 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: 'rgba(160,113,202,0.3)',
+  },
+  actionMenuOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.02)',
+    zIndex: 30,
+  },
+  actionMenuShell: {
+    position: 'absolute',
+    left: 52,
+    width: 220,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+  actionMenuSurface: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(24,24,28,0.88)',
+  },
+  actionMenuContent: {
+    backgroundColor: 'rgba(24,24,28,0.78)',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  actionMenuItem: {
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingVertical: 7,
+  },
+  actionMenuText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  actionMenuDeleteText: {
+    color: '#FF5A66',
   },
 });
