@@ -39,5 +39,5 @@ export const clearUserScopedQueryCache = async () => {
 
 export const shouldPersistQuery = (query) => {
   const [scope] = query.queryKey;
-  return ['homeFeed', 'favorites', 'albumDetails', 'artistDetails', 'songDetails', 'profileDetails', 'userRating'].includes(scope);
+  return ['homeFeed', 'favorites', 'albumDetails', 'artistDetails', 'songDetails', 'profileDetails', 'userRating', 'premiumInsights'].includes(scope);
 };

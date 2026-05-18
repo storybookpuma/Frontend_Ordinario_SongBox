@@ -82,6 +82,7 @@ const AppStack = () => {
         <Stack.Screen name="ActivityScreen" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="WrappedScreen" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="PlusScreen" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="PremiumInsightsScreen" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="PublicProfileScreen" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="SettingsScreen" options={{ animation: 'slide_from_right' }} />
       </Stack>

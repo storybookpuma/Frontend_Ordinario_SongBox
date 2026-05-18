@@ -16,4 +16,5 @@ export const queryKeys = {
   profileCompatibility: (profileId, userId) => ['profileCompatibility', profileId, userId],
   badges: (userId) => ['badges', userId],
   tasteWall: (userId) => ['tasteWall', userId],
+  premiumInsights: (userId) => ['premiumInsights', userId],
 };

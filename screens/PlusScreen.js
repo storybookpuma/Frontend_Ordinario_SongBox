@@ -48,6 +48,14 @@ export default function PlusScreen() {
           <Text style={styles.ctaText}>Unlock Plus</Text>
           <Text style={styles.ctaSub}>Coming soon</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity style={styles.archiveCta} activeOpacity={0.88} onPress={() => navigation.navigate('PremiumInsightsScreen')}>
+          <View>
+            <Text style={styles.archiveEyebrow}>Spotify Archive</Text>
+            <Text style={styles.archiveTitle}>Open Premium Insights</Text>
+          </View>
+          <Icon name="line-chart" size={18} color="#171515" />
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -165,5 +173,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  archiveCta: {
+    marginTop: 12,
+    backgroundColor: '#7AE7C7',
+    padding: 18,
+    borderRadius: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  archiveEyebrow: {
+    color: '#245448',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  archiveTitle: {
+    color: '#171515',
+    fontSize: 17,
+    fontWeight: '900',
+    marginTop: 2,
   },
 });
