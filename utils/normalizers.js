@@ -35,7 +35,9 @@ export const sortComments = (comments = []) => (
 
 export const resolveImageUrl = (url) => {
   if (!url) return null;
-  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('https://')) return url;
+  if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) return url;
+  if (url.startsWith('http://')) return null;
   const base = API_BASE_URL.replace(/\/$/, '');
   return `${base}${url.startsWith('/') ? '' : '/'}${url}`;
 };

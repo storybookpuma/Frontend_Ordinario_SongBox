@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Animated,
   RefreshControl,
-  Linking,
   useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -22,6 +21,7 @@ import { queryKeys } from '../api/queryKeys';
 import { useCharts } from '../hooks/useCharts';
 import { useActivity } from '../hooks/useActivity';
 import { useToast } from '../context/ToastContext';
+import { openYouTubeUrl } from '../utils/externalLinks';
 
 // Datos estáticos para el carrusel superior
 const DATA = [
@@ -187,15 +187,6 @@ export default function HomeScreen({ navigation }) {
         cachedAt: Date.now(),
       }));
 
-      if (
-        albumsResult.status === 'rejected' ||
-        artistsResult.status === 'rejected' ||
-        recentlyListenedResult.status === 'rejected' ||
-        moreAlbumsResult.status === 'rejected' ||
-        moreArtistsResult.status === 'rejected'
-      ) {
-        console.warn('Spotify data partially unavailable. User may need to reconnect Spotify.');
-      }
     } catch (_error) {
       showToast("Hubo un problema al cargar los datos. Intenta nuevamente.");
     } finally {
@@ -447,9 +438,10 @@ export default function HomeScreen({ navigation }) {
             <TouchableOpacity
               key={index}
               style={[styles.artistCard, { width: screenWidth / 3 }]}
-              onPress={() => {
+              onPress={async () => {
                 if (activeTab === "Videos" && item.url) {
-                  Linking.openURL(item.url);
+                  const opened = await openYouTubeUrl(item.url);
+                  if (!opened) showToast('No se pudo abrir el enlace.');
                 } else if (activeTab === "News" && item.id) {
                   navigation.navigate('AlbumDetailsScreen', { albumId: item.id });
                 } else if (activeTab === "Artist" && item.id) {

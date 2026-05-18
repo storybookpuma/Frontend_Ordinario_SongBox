@@ -51,8 +51,7 @@ export const AuthProvider = ({ children }) => {
         SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY),
         clearUserScopedQueryCache(),
       ]);
-    } catch (error) {
-      console.error('Error en logout:', error);
+    } catch {
       Alert.alert('Error', 'Ocurrió un error al cerrar sesión.');
     } finally {
       setIsLoading(false);
@@ -77,26 +76,7 @@ export const AuthProvider = ({ children }) => {
       }
     }
 
-    const token = extractTokenFromUrl(url);
-    if (!token) {
-      return false;
-    }
-
-    await SecureStore.setItemAsync(TOKEN_STORAGE_KEY, token);
-    unauthorizedAlertShown.current = false;
-    setAuthToken(token);
-
-    try {
-      const response = await createApiClient(token).get('/me', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setUser(response.data.user);
-      setAuthCompleted(true);
-      return true;
-    } catch {
-      await logout();
-      return false;
-    }
+    return false;
   }, [logout]);
 
   const openSpotifyAuth = async (email) => {
@@ -217,11 +197,6 @@ export const AuthProvider = ({ children }) => {
       {children}
     </AuthContext.Provider>
   );
-};
-
-// Función para extraer el token del URL
-const extractTokenFromUrl = (url) => {
-  return extractParamFromUrl(url, 'token');
 };
 
 const extractParamFromUrl = (url, name) => {

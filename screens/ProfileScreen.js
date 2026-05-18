@@ -10,7 +10,6 @@ import {
   TextInput,
   Modal,
   ActivityIndicator,
-  Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/FontAwesome';
@@ -27,6 +26,7 @@ import { queryKeys } from '../api/queryKeys';
 import { getUserId, splitFavorites, resolveImageUrl } from '../utils/normalizers';
 import { useToast } from '../context/ToastContext';
 import { shareViewCapture } from '../utils/shareCapture';
+import { openSpotifyUrl } from '../utils/externalLinks';
 
 export default function ProfileScreen({ navigation }) {
   const { user, isLoading, axiosInstance, setUser } = useContext(AuthContext);
@@ -59,8 +59,7 @@ export default function ProfileScreen({ navigation }) {
       try {
         const response = await axiosInstance.get('/me');
         setUser(response.data.user);
-      } catch (error) {
-        console.error('Error al refrescar el usuario:', error);
+      } catch {
       } finally {
         setIsRefreshingUser(false);
       }
@@ -183,7 +182,8 @@ export default function ProfileScreen({ navigation }) {
     const url = currentlyPlaying?.item?.url;
     if (!url) return;
     try {
-      await Linking.openURL(url);
+      const opened = await openSpotifyUrl(url);
+      if (!opened) showToast('No se pudo abrir Spotify.');
     } catch (_error) {
       showToast('No se pudo abrir Spotify.');
     }
@@ -200,8 +200,7 @@ export default function ProfileScreen({ navigation }) {
       setUser({ ...user, username: response.data.username });
       showToast('Tu nombre de usuario ha sido actualizado.');
       setIsEditingUsername(false);
-    } catch (error) {
-      console.error('Error al actualizar el nombre de usuario:', error);
+    } catch {
       showToast('No se pudo actualizar tu nombre de usuario.');
     }
   };
@@ -241,8 +240,7 @@ export default function ProfileScreen({ navigation }) {
 
       setUser({ ...user, profile_picture: response.data.profile_picture });
       showToast('Foto de perfil actualizada.');
-    } catch (error) {
-      console.error('Error al subir foto de perfil:', error);
+    } catch {
       showToast('No se pudo actualizar la foto de perfil.');
     } finally {
       setIsUploadingPicture(false);

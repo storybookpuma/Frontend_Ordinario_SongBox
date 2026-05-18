@@ -15,13 +15,13 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourapp.frontsb",
+      "bundleIdentifier": "com.songbox.app",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Esta aplicación necesita acceso a tu galería para cambiar la foto de perfil."
       }
     },
     "android": {
-      "package": "com.yourapp.frontsb",
+      "package": "com.songbox.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"

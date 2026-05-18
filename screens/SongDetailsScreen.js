@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
-  Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/FontAwesome';
@@ -26,6 +25,7 @@ import { useFavorites } from '../hooks/useFavorites';
 import { useRating } from '../hooks/useRating';
 import { getApiErrorMessage } from '../utils/errors';
 import { applyRatingDistributionChange, distributionWithUserFallback, hasRatingDistribution } from '../utils/ratingDistribution';
+import { openSpotifyUrl } from '../utils/externalLinks';
 
 const HEADER_MAX = 340;
 
@@ -136,13 +136,18 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
     }
   };
 
-  const handlePlayPress = () => {
-    if (songData.preview_url) {
-      Linking.openURL(songData.preview_url);
-    } else if (songData.url) {
-      Linking.openURL(songData.url);
-    } else {
+  const handlePlayPress = async () => {
+    const url = songData.preview_url || songData.url;
+    if (!url) {
       showToast('No hay URL disponible para reproducir esta canción.');
+      return;
+    }
+
+    try {
+      const opened = await openSpotifyUrl(url);
+      if (!opened) showToast('No se pudo abrir Spotify.');
+    } catch {
+      showToast('No se pudo abrir Spotify.');
     }
   };
 

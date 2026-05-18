@@ -251,8 +251,7 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
         };
       });
     },
-    onError: (error) => {
-      console.error('Error posting comment:', error?.response?.data || error?.message || error);
+    onError: () => {
       showToast('No se pudo agregar el comentario.');
     },
   });
