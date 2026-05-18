@@ -4,10 +4,18 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider, DarkTheme } from '@react-navigation/native';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import * as Sentry from '@sentry/react-native';
 import LoadingScreen from '../components/LoadingScreen';
 import { AuthContext, AuthProvider } from '../context/AuthContext';
 import { ToastProvider } from '../context/ToastContext';
 import { queryClient, queryPersister, shouldPersistQuery } from '../api/queryClient';
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  enabled: Boolean(process.env.EXPO_PUBLIC_SENTRY_DSN),
+  sendDefaultPii: false,
+  tracesSampleRate: 0.1,
+});
 
 const PRELOADED_ASSETS = [
   require('../assets/Logo.png'),
@@ -81,7 +89,7 @@ const AppStack = () => {
   );
 };
 
-export default function RootLayout() {
+function RootLayout() {
   return (
     <PersistQueryClientProvider
       client={queryClient}
@@ -103,3 +111,5 @@ export default function RootLayout() {
     </PersistQueryClientProvider>
   );
 }
+
+export default Sentry.wrap(RootLayout);

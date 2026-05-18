@@ -33,7 +33,8 @@
     "plugins": [
       "expo-video",
       "expo-asset",
-      "expo-router"
+      "expo-router",
+      "@sentry/react-native"
     ]
   }
 }

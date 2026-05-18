@@ -6,6 +6,7 @@
 - Required frontend verification before handing off UI changes: `npm run lint` then `npx expo-doctor`.
 - There is no test or typecheck script in `package.json`; do not invent one.
 - Formatting command exists as `npm run format` and runs Prettier over the repo.
+- EAS profiles live in `eas.json`; EAS build commands require an Expo account (`eas login`) or `EXPO_TOKEN` in CI.
 
 ## App Entry And Navigation
 - `package.json` uses `"main": "expo-router/entry"`; do not add back legacy `App.js`, `index.js`, or `AppNavigator.js` entrypoints.
@@ -16,6 +17,7 @@
 
 ## API, Auth, And Cache
 - API base URL is `EXPO_PUBLIC_API_URL`, with fallback in `config/env.js` to `https://songbox-ordinario.onrender.com`; `.env.example` documents the env key.
+- Sentry is initialized in `app/_layout.js` and stays disabled unless `EXPO_PUBLIC_SENTRY_DSN` is set.
 - API calls use the axios client from `api/client.js`; authenticated calls come from `AuthContext` as `axiosInstance`.
 - Auth tokens are stored in `expo-secure-store` under `userToken`; logout and 401 handling must call `clearUserScopedQueryCache()` to avoid cross-user persisted data.
 - React Query is configured in `api/queryClient.js` and persisted to AsyncStorage under `songbox-react-query-cache`; only selected query scopes persist.
