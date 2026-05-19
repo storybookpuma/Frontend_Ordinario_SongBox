@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
 import { queryKeys } from '../api/queryKeys';
 import { getUserId } from '../utils/normalizers';
+import { waitForSpotifySyncJob } from '../utils/spotifySync';
 
 export const usePremiumInsights = () => {
   const { axiosInstance, user } = useContext(AuthContext);
@@ -74,6 +75,9 @@ export const useSpotifyFullSync = () => {
       const response = await axiosInstance.post('/spotify/sync', null, {
         params: force ? { force: 'true' } : undefined,
       });
+      if (response.data?.queued && response.data?.jobId) {
+        await waitForSpotifySyncJob(axiosInstance, response.data.jobId);
+      }
       return response.data;
     },
     onSuccess: () => {

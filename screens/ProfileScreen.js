@@ -3,7 +3,6 @@ import {
   View, 
   Text, 
   StyleSheet, 
-  FlatList, 
   TouchableOpacity,
   Animated,
   Platform,
@@ -21,12 +20,21 @@ import { useSpotifyPlayback } from '../hooks/useSpotifyPlayback';
 import { useBadges } from '../hooks/useBadges';
 import { AuthContext } from '../context/AuthContext';
 import LoadingScreen from '../components/LoadingScreen';
-import { SkeletonCard, SkeletonList } from '../components/Skeleton';
+import { SkeletonList } from '../components/Skeleton';
 import { queryKeys } from '../api/queryKeys';
 import { getUserId, splitFavorites, resolveImageUrl } from '../utils/normalizers';
 import { useToast } from '../context/ToastContext';
 import { shareViewCapture } from '../utils/shareCapture';
 import { openSpotifyUrl } from '../utils/externalLinks';
+import { waitForSpotifySyncJob } from '../utils/spotifySync';
+import {
+  BadgesSection,
+  FavoriteCarouselSection,
+  FollowingSection,
+  ProfileShareCard,
+  TasteWallSection,
+  Top3ShareCard,
+} from './profile/ProfileSections';
 
 export default function ProfileScreen({ navigation }) {
   const { user, isLoading, axiosInstance, setUser } = useContext(AuthContext);
@@ -105,7 +113,13 @@ export default function ProfileScreen({ navigation }) {
     spotifySyncStarted.current = true;
     const syncTimer = setTimeout(() => {
       axiosInstance.post('/spotify/sync')
-        .then(() => refetchProfile())
+        .then(async (response) => {
+          if (response.data?.queued && response.data?.jobId) {
+            const job = await waitForSpotifySyncJob(axiosInstance, response.data.jobId);
+            if (job?.status === 'timeout') return;
+          }
+          refetchProfile();
+        })
         .catch(() => {
           spotifySyncStarted.current = false;
         });
@@ -363,7 +377,7 @@ export default function ProfileScreen({ navigation }) {
         )}
       </View>
 
-      <TasteWallSection data={tasteWall} navigation={navigation} />
+      <TasteWallSection styles={styles} data={tasteWall} navigation={navigation} />
 
       <TouchableOpacity
         style={styles.wrappedButton}
@@ -381,6 +395,7 @@ export default function ProfileScreen({ navigation }) {
 
       <FavoriteCarouselSection
         title="My Favorite Albums"
+        styles={styles}
         titleStyle={styles.albumsTitle}
         data={favoriteAlbums}
         isLoading={isLoadingFavorites}
@@ -389,6 +404,7 @@ export default function ProfileScreen({ navigation }) {
 
       <FavoriteCarouselSection
         title="My Favorite Artists"
+        styles={styles}
         titleStyle={styles.artistsTitle}
         data={favoriteArtists}
         isLoading={isLoadingFavorites}
@@ -397,7 +413,7 @@ export default function ProfileScreen({ navigation }) {
 
       <Text style={styles.songsTitle}>My Favorite Songs</Text>
 
-      <BadgesSection badges={badges} />
+      <BadgesSection styles={styles} badges={badges} />
 
       <TouchableOpacity
         style={styles.plusButton}
@@ -421,6 +437,7 @@ export default function ProfileScreen({ navigation }) {
 
   const followingSection = useMemo(() => (
     <FollowingSection
+      styles={styles}
       followingCount={followingIds.length}
       followingUsers={followingUsers}
       isLoading={isLoadingFollowing}
@@ -445,6 +462,7 @@ export default function ProfileScreen({ navigation }) {
         {shouldRenderProfileShare ? (
           <View ref={profileCaptureRef} collapsable={false} style={styles.profileShareCaptureWrap}>
             <ProfileShareCard
+              styles={styles}
               username={user?.username || 'SongBox listener'}
               profileImageSource={profileImageSource}
               favoriteAlbums={favoriteAlbums.length}
@@ -458,6 +476,7 @@ export default function ProfileScreen({ navigation }) {
         {shouldRenderTop3Share ? (
           <View ref={top3CaptureRef} collapsable={false} style={styles.profileShareCaptureWrap}>
             <Top3ShareCard
+              styles={styles}
               username={user?.username || 'SongBox listener'}
               profileImageSource={profileImageSource}
               items={top3Items}
@@ -559,247 +578,6 @@ export default function ProfileScreen({ navigation }) {
     </View>
   );
 }
-
-const ProfileCarouselSkeleton = () => (
-  <View style={styles.profileSkeletonRow}>
-    {Array.from({ length: 3 }).map((_, index) => (
-      <SkeletonCard key={index} style={styles.profileSkeletonCard} imageStyle={styles.profileSkeletonImage} />
-    ))}
-  </View>
-);
-
-const FavoriteCarouselSection = React.memo(function FavoriteCarouselSection({ title, titleStyle, data, isLoading, renderItem }) {
-  return (
-    <>
-      <Text style={titleStyle}>{title}</Text>
-      {isLoading ? (
-        <ProfileCarouselSkeleton />
-      ) : (
-        <FlatList
-          data={data}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.entityId}
-          horizontal={true}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.carouselContainer}
-          snapToAlignment="center"
-          snapToInterval={180}
-          decelerationRate="fast"
-          initialNumToRender={4}
-          maxToRenderPerBatch={4}
-          windowSize={5}
-          removeClippedSubviews={Platform.OS === 'android'}
-        />
-      )}
-    </>
-  );
-});
-
-const FollowingSection = React.memo(function FollowingSection({ followingCount, followingUsers, isLoading, renderItem }) {
-  return (
-    <>
-      <Text style={styles.followingTitle}>People I Follow</Text>
-      {isLoading ? (
-        <SkeletonList count={2} itemStyle={styles.followingSkeletonItem} />
-      ) : followingCount === 0 ? (
-        <Text style={styles.noFollowingText}>You are not following anyone.</Text>
-      ) : (
-        <FlatList
-          data={followingUsers}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id}
-          horizontal={true}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.carouselContainer}
-          snapToAlignment="center"
-          snapToInterval={180}
-          decelerationRate="fast"
-          initialNumToRender={4}
-          maxToRenderPerBatch={4}
-          windowSize={5}
-          removeClippedSubviews={Platform.OS === 'android'}
-        />
-      )}
-    </>
-  );
-});
-
-const BADGE_COLORS = {
-  common: '#A9A0B8',
-  uncommon: '#7AE7C7',
-  rare: '#BBA7FF',
-  epic: '#FFD166',
-};
-
-const BadgesSection = React.memo(function BadgesSection({ badges }) {
-  if (!badges || badges.length === 0) return null;
-  return (
-    <View style={styles.badgesCard}>
-      <View style={styles.badgesHeader}>
-        <Text style={styles.badgesTitle}>Taste Badges</Text>
-        <Text style={styles.badgesCount}>{badges.length}</Text>
-      </View>
-      <View style={styles.badgesGrid}>
-        {badges.map((badge) => (
-          <View key={badge.id} style={styles.badgePill}>
-            <Icon name={badge.icon} size={13} color={BADGE_COLORS[badge.rarity] || '#A9A0B8'} />
-            <Text style={styles.badgeName} numberOfLines={1}>{badge.name}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-});
-
-const ProfileShareCard = React.memo(function ProfileShareCard({
-  username,
-  profileImageSource,
-  favoriteAlbums,
-  favoriteArtists,
-  favoriteSongs,
-  following,
-}) {
-  return (
-    <View style={styles.profileShareCard}>
-      <View style={styles.profileShareAura} />
-      <Text style={styles.profileShareKicker}>SongBox Profile</Text>
-      <View style={styles.profileShareIdentity}>
-        <Image source={profileImageSource} style={styles.profileShareImage} contentFit="cover" />
-        <View style={styles.profileShareNameBlock}>
-          <Text style={styles.profileShareName} numberOfLines={1}>{username}</Text>
-          <Text style={styles.profileShareSubtitle}>music taste archive</Text>
-        </View>
-      </View>
-      <View style={styles.profileShareStats}>
-        <ProfileShareStat label="Albums" value={favoriteAlbums} />
-        <ProfileShareStat label="Artists" value={favoriteArtists} />
-        <ProfileShareStat label="Songs" value={favoriteSongs} />
-        <ProfileShareStat label="Following" value={following} />
-      </View>
-      <View style={styles.profileShareFooter}>
-        <Text style={styles.profileShareFooterText}>Made with SongBox</Text>
-        <View style={styles.profileShareMark} />
-      </View>
-    </View>
-  );
-});
-
-const ProfileShareStat = ({ label, value }) => (
-  <View style={styles.profileShareStat}>
-    <Text style={styles.profileShareStatValue}>{value}</Text>
-    <Text style={styles.profileShareStatLabel}>{label}</Text>
-  </View>
-);
-
-const Top3ShareCard = React.memo(function Top3ShareCard({
-  username,
-  profileImageSource,
-  items,
-}) {
-  return (
-    <View style={styles.top3ShareCard}>
-      <View style={styles.top3ShareAura} />
-      <Text style={styles.top3ShareKicker}>My Top 3</Text>
-      <View style={styles.top3ShareIdentity}>
-        <Image source={profileImageSource} style={styles.top3ShareImage} contentFit="cover" />
-        <Text style={styles.top3ShareName} numberOfLines={1}>{username}</Text>
-      </View>
-      <View style={styles.top3List}>
-        {items.map((item, index) => (
-          <View key={`${item.entityType}-${item.entityId}-${index}`} style={styles.top3Item}>
-            <Text style={styles.top3Rank}>#{index + 1}</Text>
-            {item.image ? (
-              <Image source={{ uri: item.image }} style={styles.top3ItemImage} contentFit="cover" />
-            ) : (
-              <View style={styles.top3ItemImagePlaceholder} />
-            )}
-            <View style={styles.top3ItemInfo}>
-              <Text style={styles.top3ItemName} numberOfLines={1}>{item.name || item.entityId}</Text>
-              <Text style={styles.top3ItemMeta}>{item.artist || item.typeLabel}</Text>
-            </View>
-          </View>
-        ))}
-      </View>
-      <View style={styles.top3Footer}>
-        <Text style={styles.top3FooterText}>Made with SongBox</Text>
-        <View style={styles.top3Mark} />
-      </View>
-    </View>
-  );
-});
-
-const TasteWallSection = React.memo(function TasteWallSection({ data, navigation }) {
-  const pinnedItems = data.top3Items || [];
-  const recentFavorites = data.recentFavorites || [];
-
-  const openItem = (item) => {
-    if (item.entityType === 'song') navigation.navigate('SongDetailsScreen', { songId: item.entityId });
-    if (item.entityType === 'album') navigation.navigate('AlbumDetailsScreen', { albumId: item.entityId });
-    if (item.entityType === 'artist') navigation.navigate('ArtistDetailsScreen', { artistId: item.entityId });
-  };
-
-  return (
-    <View style={styles.tasteWallCard}>
-      <View style={styles.tasteWallHeader}>
-        <View>
-          <Text style={styles.tasteWallKicker}>Taste Wall</Text>
-          <Text style={styles.tasteWallTitle}>{data.currentEra}</Text>
-        </View>
-        <View style={styles.tasteWallStamp}>
-          <Text style={styles.tasteWallStampText}>{data.totalFavorites}</Text>
-          <Text style={styles.tasteWallStampLabel}>saves</Text>
-        </View>
-      </View>
-
-      <View style={styles.tasteDnaRow}>
-        <View style={styles.tasteDnaPill}>
-          <Text style={styles.tasteDnaValue}>{data.dominantType}</Text>
-          <Text style={styles.tasteDnaLabel}>main lane</Text>
-        </View>
-        <View style={styles.tasteDnaPill}>
-          <Text style={styles.tasteDnaValue}>{pinnedItems.length || '...'}</Text>
-          <Text style={styles.tasteDnaLabel}>pinned</Text>
-        </View>
-      </View>
-
-      {pinnedItems.length > 0 ? (
-        <View style={styles.pinnedGrid}>
-          {pinnedItems.map((item, index) => (
-            <TouchableOpacity key={`${item.entityType}-${item.entityId}-${index}`} style={styles.pinnedItem} onPress={() => openItem(item)} activeOpacity={0.86}>
-              {item.image ? <Image source={{ uri: item.image }} style={styles.pinnedImage} contentFit="cover" /> : <View style={styles.pinnedImage} />}
-              <Text style={styles.pinnedRank}>#{index + 1}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : (
-        <View style={styles.wallEmptyState}>
-          <Text style={styles.wallEmptyTitle}>Build your pinned taste</Text>
-          <Text style={styles.wallEmptyText}>Favorite albums, songs, and artists to turn this profile into your music diary.</Text>
-        </View>
-      )}
-
-      {recentFavorites.length > 0 && (
-        <View style={styles.recentWallList}>
-          <Text style={styles.recentWallTitle}>Music Wall</Text>
-          {recentFavorites.map((item, index) => (
-            <TouchableOpacity key={`${item.entityType}-${item.entityId}-${index}`} style={styles.recentWallItem} onPress={() => openItem(item)} activeOpacity={0.86}>
-              <View style={styles.wallAvatarMark}>
-                <Icon name={item.source === 'spotify_api' ? 'spotify' : 'bookmark'} size={13} color="#171515" />
-              </View>
-              <View style={styles.recentWallCopy}>
-                <Text style={styles.recentWallAction}>
-                  {item.signalType === 'recent_play' ? 'Recently played' : item.signalType === 'top_artist' ? 'Top artist' : item.signalType === 'top_track' ? 'Top track' : item.signalType === 'rating' ? 'Rated' : 'Saved'}
-                </Text>
-                <Text style={styles.recentWallName} numberOfLines={1}>{item.name || item.entityId}</Text>
-              </View>
-              <Text style={styles.recentWallType}>{item.entityType}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-    </View>
-  );
-});
 
 const styles = StyleSheet.create({
   container: {
