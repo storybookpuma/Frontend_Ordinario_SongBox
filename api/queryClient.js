@@ -41,7 +41,7 @@ export const clearUserScopedQueryCache = async () => {
 export const shouldPersistQuery = (query) => {
   if (query.state.status !== 'success') return false;
   const [scope] = query.queryKey;
-  return ['homeFeed', 'favorites', 'albumDetails', 'artistDetails', 'songDetails', 'profileDetails', 'userRating'].includes(scope);
+  return ['homeFeed', 'mobileProfile', 'favorites', 'albumDetails', 'artistDetails', 'songDetails', 'profileDetails', 'userRating'].includes(scope);
 };
 
 export const invalidateHomeFeedForUser = (queryClient, userId) => {

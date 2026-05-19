@@ -23,7 +23,6 @@ import { AuthContext } from '../context/AuthContext';
 import LoadingScreen from '../components/LoadingScreen';
 import { SkeletonCard, SkeletonList } from '../components/Skeleton';
 import { queryKeys } from '../api/queryKeys';
-import { useFavorites } from '../hooks/useFavorites';
 import { getUserId, splitFavorites, resolveImageUrl } from '../utils/normalizers';
 import { useToast } from '../context/ToastContext';
 import { shareViewCapture } from '../utils/shareCapture';
@@ -54,6 +53,20 @@ export default function ProfileScreen({ navigation }) {
   const [shouldRenderProfileShare, setShouldRenderProfileShare] = useState(false);
   const [shouldRenderTop3Share, setShouldRenderTop3Share] = useState(false);
 
+  const {
+    data: mobileProfile,
+    isLoading: isLoadingProfile,
+    refetch: refetchProfile,
+  } = useQuery({
+    queryKey: queryKeys.mobileProfile(entityId),
+    enabled: Boolean(entityId && axiosInstance),
+    queryFn: async () => {
+      const response = await axiosInstance.get('/mobile/profile/me');
+      return response.data;
+    },
+    staleTime: 1000 * 60 * 3,
+  });
+
   useEffect(() => {
     spotifySyncStarted.current = false;
     setNewUsername(user?.username || '');
@@ -79,48 +92,30 @@ export default function ProfileScreen({ navigation }) {
     refreshUser();
   }, [axiosInstance, entityId, setUser, user]);
 
-  const { favorites, isLoading: isLoadingFavorites } = useFavorites();
+  const favorites = useMemo(() => mobileProfile?.favorites || [], [mobileProfile?.favorites]);
+  const isLoadingFavorites = isLoadingProfile;
 
   const { data: currentlyPlaying } = useSpotifyPlayback({ enabled: isFocused });
   const { data: badges = [] } = useBadges();
 
-  const {
-    data: tasteWallData,
-    refetch: refetchTasteWall,
-  } = useQuery({
-    queryKey: queryKeys.tasteWall(entityId),
-    enabled: Boolean(entityId && axiosInstance),
-    queryFn: async () => {
-      const response = await axiosInstance.get('/taste/wall');
-      return response.data;
-    },
-  });
+  const tasteWallData = mobileProfile?.tasteWall;
 
   useEffect(() => {
-    if (!isFocused || !user?.spotify_connected || !axiosInstance || spotifySyncStarted.current) return;
+    if (!isFocused || !mobileProfile?.sync?.canSyncNow || !axiosInstance || spotifySyncStarted.current) return;
     spotifySyncStarted.current = true;
     const syncTimer = setTimeout(() => {
       axiosInstance.post('/spotify/sync')
-        .then(() => refetchTasteWall())
+        .then(() => refetchProfile())
         .catch(() => {
           spotifySyncStarted.current = false;
         });
-    }, 900);
+    }, 1200);
 
     return () => clearTimeout(syncTimer);
-  }, [axiosInstance, isFocused, refetchTasteWall, user?.spotify_connected]);
+  }, [axiosInstance, isFocused, mobileProfile?.sync?.canSyncNow, refetchProfile]);
 
-  const {
-    data: followingUsers = [],
-    isLoading: isLoadingFollowing,
-  } = useQuery({
-    queryKey: queryKeys.followingDetails(entityId, followingIds),
-    enabled: Boolean(axiosInstance && followingIds.length > 0),
-    queryFn: async () => {
-      const response = await axiosInstance.post('/get_following_details', { ids: followingIds });
-      return response.data.users || [];
-    },
-  });
+  const followingUsers = useMemo(() => mobileProfile?.followingUsers || [], [mobileProfile?.followingUsers]);
+  const isLoadingFollowing = isLoadingProfile && followingIds.length > 0;
 
   const { albums: favoriteAlbums, songs: favoriteSongs, artists: favoriteArtists } = useMemo(
     () => splitFavorites(favorites),

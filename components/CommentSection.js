@@ -179,20 +179,19 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
   const commentsQuery = useInfiniteQuery({
     queryKey,
     enabled: Boolean(userId && entityId && axiosInstance && modalVisible),
-    initialPageParam: 1,
+    initialPageParam: null,
     queryFn: async ({ pageParam }) => {
       const response = await axiosInstance.get(`/${entityType}/${entityId}/comments`, {
-        params: { page: pageParam, limit: 10 },
+        params: { cursor: pageParam || undefined, limit: 10 },
       });
       return {
         comments: response.data.comments || [],
-        pagination: response.data.pagination || { page: pageParam, total_pages: 1 },
+        nextCursor: response.data.nextCursor || response.data.pagination?.nextCursor || null,
+        hasMore: Boolean(response.data.hasMore || response.data.pagination?.hasMore),
       };
     },
     getNextPageParam: (lastPage) => {
-      const page = lastPage.pagination?.page || 1;
-      const totalPages = lastPage.pagination?.total_pages || 1;
-      return page < totalPages ? page + 1 : undefined;
+      return lastPage.hasMore ? lastPage.nextCursor : undefined;
     },
   });
 

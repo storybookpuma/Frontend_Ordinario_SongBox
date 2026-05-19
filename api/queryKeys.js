@@ -1,5 +1,6 @@
 export const queryKeys = {
   homeFeed: (userId) => ['homeFeed', userId],
+  mobileProfile: (userId) => ['mobileProfile', userId],
   search: (category, query) => ['search', category, query],
   albumDetails: (albumId, userId) => ['albumDetails', albumId, userId],
   artistDetails: (artistId, userId) => ['artistDetails', artistId, userId],

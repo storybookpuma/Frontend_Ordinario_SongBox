@@ -31,6 +31,7 @@ export const useRating = ({ entityType, entityId, name, image, artist, enabled =
     queryClient.invalidateQueries({ queryKey: detailsQueryKey });
     queryClient.invalidateQueries({ queryKey: ['charts', entityType], exact: false });
     queryClient.invalidateQueries({ queryKey: ['activity'], exact: false });
+    queryClient.invalidateQueries({ queryKey: queryKeys.mobileProfile(userId) });
     invalidateHomeFeedForUser(queryClient, userId);
   };
 

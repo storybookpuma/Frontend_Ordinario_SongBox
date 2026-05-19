@@ -1,5 +1,5 @@
 import { useContext } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
 import { queryKeys } from '../api/queryKeys';
 import { getUserId } from '../utils/normalizers';
@@ -8,14 +8,20 @@ export const useActivity = ({ limit = 20, scope = 'personalized', enabled = true
   const { axiosInstance, user } = useContext(AuthContext);
   const userId = getUserId(user);
 
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: queryKeys.activity(limit, scope, userId),
     enabled: Boolean(enabled && axiosInstance && (scope !== 'personalized' || userId)),
-    queryFn: async () => {
+    initialPageParam: null,
+    queryFn: async ({ pageParam }) => {
       const response = await axiosInstance.get('/activity', {
-        params: { limit, scope },
+        params: { limit, scope, cursor: pageParam || undefined },
       });
-      return response.data.activities || [];
+      return {
+        activities: response.data.activities || [],
+        nextCursor: response.data.nextCursor || null,
+        hasMore: Boolean(response.data.hasMore),
+      };
     },
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.nextCursor : undefined),
   });
 };

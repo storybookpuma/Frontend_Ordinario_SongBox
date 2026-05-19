@@ -70,6 +70,7 @@ export const useFavorites = () => {
       queryClient.invalidateQueries({ queryKey });
       queryClient.invalidateQueries({ queryKey: ['activity'], exact: false });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasteWall(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mobileProfile(userId) });
       invalidateHomeFeedForUser(queryClient, userId);
     },
   });

@@ -19,7 +19,14 @@ const ACTIVITY_ICONS = {
 };
 
 export default function ActivityScreen({ navigation }) {
-  const { data: activities = [], isLoading } = useActivity({ limit: 50 });
+  const {
+    data,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useActivity({ limit: 25 });
+  const activities = data?.pages.flatMap((page) => page.activities || []) || [];
 
   const renderItem = ({ item }) => (
     <TouchableOpacity
@@ -82,6 +89,10 @@ export default function ActivityScreen({ navigation }) {
           data={activities}
           renderItem={renderItem}
           keyExtractor={(_, index) => `activity-${index}`}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+          }}
+          onEndReachedThreshold={0.4}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
