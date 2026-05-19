@@ -1,9 +1,9 @@
 export const queryKeys = {
   homeFeed: (userId) => ['homeFeed', userId],
   search: (category, query) => ['search', category, query],
-  albumDetails: (albumId) => ['albumDetails', albumId],
-  artistDetails: (artistId) => ['artistDetails', artistId],
-  songDetails: (songId) => ['songDetails', songId],
+  albumDetails: (albumId, userId) => ['albumDetails', albumId, userId],
+  artistDetails: (artistId, userId) => ['artistDetails', artistId, userId],
+  songDetails: (songId, userId) => ['songDetails', songId, userId],
   profileDetails: (profileId, userId) => ['profileDetails', profileId, userId],
   userRating: (entityType, entityId, userId) => ['userRating', entityType, entityId, userId],
   favorites: (userId) => ['favorites', userId],

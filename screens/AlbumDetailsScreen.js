@@ -25,6 +25,7 @@ import { useFavorites } from '../hooks/useFavorites';
 import { useEntityDetailUiState } from '../hooks/useEntityDetailUiState';
 import { useRating } from '../hooks/useRating';
 import { getApiErrorMessage } from '../utils/errors';
+import { getUserId } from '../utils/normalizers';
 import { applyRatingDistributionChange, distributionWithUserFallback, hasRatingDistribution } from '../utils/ratingDistribution';
 
 const HEADER_MAX = 320;
@@ -38,6 +39,7 @@ const AlbumDetailsScreen = ({ route, navigation: navigationProp }) => {
   const commentRef = useRef(null);
   const promptScale = useRef(new Animated.Value(0.96)).current;
   const { axiosInstance, user } = useContext(AuthContext);
+  const userId = getUserId(user);
 
   const routeAlbumId = route?.params?.albumId;
   const album = useMemo(
@@ -55,8 +57,8 @@ const AlbumDetailsScreen = ({ route, navigation: navigationProp }) => {
   const { favorites, toggleFavorite } = useFavorites();
 
   const albumDetailsQuery = useQuery({
-    queryKey: queryKeys.albumDetails(album?.id),
-    enabled: Boolean(album?.id && axiosInstance),
+    queryKey: queryKeys.albumDetails(album?.id, userId),
+    enabled: Boolean(album?.id && userId && axiosInstance),
     queryFn: async () => {
       const response = await axiosInstance.get(`/mobile/entity/album/${encodeURIComponent(album?.id)}`);
       return response.data.album;

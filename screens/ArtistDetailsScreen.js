@@ -25,6 +25,7 @@ import { useFavorites } from '../hooks/useFavorites';
 import { useEntityDetailUiState } from '../hooks/useEntityDetailUiState';
 import { useRating } from '../hooks/useRating';
 import { getApiErrorMessage } from '../utils/errors';
+import { getUserId } from '../utils/normalizers';
 import { applyRatingDistributionChange, distributionWithUserFallback, hasRatingDistribution } from '../utils/ratingDistribution';
 
 const HEADER_MAX = 340;
@@ -38,14 +39,15 @@ const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
   const commentRef = useRef(null);
   const promptScale = useRef(new Animated.Value(0.96)).current;
   const { axiosInstance, user } = useContext(AuthContext);
+  const userId = getUserId(user);
 
   const artistId = route?.params?.artistId;
 
   const { favorites, toggleFavorite } = useFavorites();
 
   const artistDetailsQuery = useQuery({
-    queryKey: queryKeys.artistDetails(artistId),
-    enabled: Boolean(artistId && axiosInstance),
+    queryKey: queryKeys.artistDetails(artistId, userId),
+    enabled: Boolean(artistId && userId && axiosInstance),
     queryFn: async () => {
       const response = await axiosInstance.get(`/mobile/entity/artist/${encodeURIComponent(artistId)}`);
       return response.data;

@@ -25,6 +25,7 @@ import { useFavorites } from '../hooks/useFavorites';
 import { useEntityDetailUiState } from '../hooks/useEntityDetailUiState';
 import { useRating } from '../hooks/useRating';
 import { getApiErrorMessage } from '../utils/errors';
+import { getUserId } from '../utils/normalizers';
 import { applyRatingDistributionChange, distributionWithUserFallback, hasRatingDistribution } from '../utils/ratingDistribution';
 import { openSpotifyUrl } from '../utils/externalLinks';
 
@@ -39,14 +40,15 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
   const commentRef = useRef(null);
   const promptScale = useRef(new Animated.Value(0.96)).current;
   const { axiosInstance, user } = useContext(AuthContext);
+  const userId = getUserId(user);
 
   const songId = route?.params?.songId;
 
   const { favorites, toggleFavorite } = useFavorites();
 
   const songDetailsQuery = useQuery({
-    queryKey: queryKeys.songDetails(songId),
-    enabled: Boolean(songId && axiosInstance),
+    queryKey: queryKeys.songDetails(songId, userId),
+    enabled: Boolean(songId && userId && axiosInstance),
     queryFn: async () => {
       const response = await axiosInstance.get(`/mobile/entity/song/${encodeURIComponent(songId)}`);
       return response.data.song;

@@ -13,7 +13,7 @@ export const useRating = ({ entityType, entityId, name, image, artist, enabled =
   const { showToast } = useToast();
   const userId = getUserId(user);
   const queryKey = queryKeys.userRating(entityType, entityId, userId);
-  const detailsQueryKey = queryKeys[entityType === 'song' ? 'songDetails' : entityType === 'album' ? 'albumDetails' : 'artistDetails'](entityId);
+  const detailsQueryKey = queryKeys[entityType === 'song' ? 'songDetails' : entityType === 'album' ? 'albumDetails' : 'artistDetails'](entityId, userId);
 
   const query = useQuery({
     queryKey,

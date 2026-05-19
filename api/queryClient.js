@@ -24,7 +24,7 @@ export const queryClient = new QueryClient({
 
 export const queryPersister = createAsyncStoragePersister({
   storage: AsyncStorage,
-  key: 'songbox-react-query-cache:v2',
+  key: 'songbox-react-query-cache:v3',
 });
 
 export const clearUserScopedQueryCache = async () => {
