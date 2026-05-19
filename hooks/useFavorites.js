@@ -2,6 +2,7 @@ import { useContext, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
 import { queryKeys } from '../api/queryKeys';
+import { invalidateHomeFeedForUser } from '../api/queryClient';
 import { getUserId } from '../utils/normalizers';
 
 export const useFavorites = () => {
@@ -68,6 +69,8 @@ export const useFavorites = () => {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey });
       queryClient.invalidateQueries({ queryKey: ['activity'], exact: false });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasteWall(userId) });
+      invalidateHomeFeedForUser(queryClient, userId);
     },
   });
 

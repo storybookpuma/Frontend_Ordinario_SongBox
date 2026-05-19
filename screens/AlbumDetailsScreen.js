@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef, useMemo } from 'react';
+import React, { useEffect, useContext, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import { DetailSkeleton } from '../components/Skeleton';
 import { queryKeys } from '../api/queryKeys';
 import { useToast } from '../context/ToastContext';
 import { useFavorites } from '../hooks/useFavorites';
+import { useEntityDetailUiState } from '../hooks/useEntityDetailUiState';
 import { useRating } from '../hooks/useRating';
 import { getApiErrorMessage } from '../utils/errors';
 import { applyRatingDistributionChange, distributionWithUserFallback, hasRatingDistribution } from '../utils/ratingDistribution';
@@ -51,23 +52,7 @@ const AlbumDetailsScreen = ({ route, navigation: navigationProp }) => {
     }
   }, [album, navigation, showToast]);
 
-  const [albumData, setAlbumData] = useState(null);
-  const [isFavorite, setIsFavorite] = useState(false);
-  const [userRating, setUserRating] = useState(0);
-  const [averageRating, setAverageRating] = useState(0);
-  const [ratingCount, setRatingCount] = useState(0);
-  const [ratingDistribution, setRatingDistribution] = useState({});
-  const [showReviewPrompt, setShowReviewPrompt] = useState(false);
-
   const { favorites, toggleFavorite } = useFavorites();
-  const userRatingQuery = useRating({
-    entityType: 'album',
-    entityId: album?.id,
-    enabled: false,
-    name: albumData?.name,
-    image: albumData?.cover_image,
-    artist: albumData?.artists?.join(', '),
-  });
 
   const albumDetailsQuery = useQuery({
     queryKey: queryKeys.albumDetails(album?.id),
@@ -78,15 +63,31 @@ const AlbumDetailsScreen = ({ route, navigation: navigationProp }) => {
     },
   });
 
-  useEffect(() => {
-    if (!albumDetailsQuery.data) return;
-    setAlbumData(albumDetailsQuery.data);
-    setAverageRating(albumDetailsQuery.data.averageRating || 0);
-    setRatingCount(albumDetailsQuery.data.ratingCount || 0);
-    setRatingDistribution(albumDetailsQuery.data.ratingDistribution || {});
-    setUserRating(albumDetailsQuery.data.userRating || 0);
-    setIsFavorite(Boolean(albumDetailsQuery.data.isFavorite));
-  }, [albumDetailsQuery.data]);
+  const {
+    entityData: albumData,
+    isFavorite,
+    setIsFavorite,
+    userRating,
+    setUserRating,
+    averageRating,
+    setAverageRating,
+    ratingCount,
+    setRatingCount,
+    ratingDistribution,
+    setRatingDistribution,
+    showReviewPrompt,
+    setShowReviewPrompt,
+    isDetailReady,
+  } = useEntityDetailUiState(album?.id, albumDetailsQuery);
+
+  const userRatingQuery = useRating({
+    entityType: 'album',
+    entityId: album?.id,
+    enabled: false,
+    name: albumData?.name,
+    image: albumData?.cover_image,
+    artist: albumData?.artists?.join(', '),
+  });
 
   useEffect(() => {
     Animated.spring(promptScale, {
@@ -188,7 +189,7 @@ const AlbumDetailsScreen = ({ route, navigation: navigationProp }) => {
     commentRef.current?.open();
   };
 
-  if (!albumData) {
+  if (!isDetailReady) {
     return <DetailSkeleton />;
   }
 

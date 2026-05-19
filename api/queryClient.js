@@ -1,6 +1,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
+import { queryKeys } from './queryKeys';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,4 +42,9 @@ export const shouldPersistQuery = (query) => {
   if (query.state.status !== 'success') return false;
   const [scope] = query.queryKey;
   return ['homeFeed', 'favorites', 'albumDetails', 'artistDetails', 'songDetails', 'profileDetails', 'userRating'].includes(scope);
+};
+
+export const invalidateHomeFeedForUser = (queryClient, userId) => {
+  if (!userId) return Promise.resolve();
+  return queryClient.invalidateQueries({ queryKey: queryKeys.homeFeed(userId) });
 };

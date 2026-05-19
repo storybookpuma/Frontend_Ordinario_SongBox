@@ -7,7 +7,7 @@ export const queryKeys = {
   profileDetails: (profileId, userId) => ['profileDetails', profileId, userId],
   userRating: (entityType, entityId, userId) => ['userRating', entityType, entityId, userId],
   favorites: (userId) => ['favorites', userId],
-  followingDetails: (ids = []) => ['followingDetails', ids.join(',')],
+  followingDetails: (userId, ids = []) => ['followingDetails', userId, [...ids].sort().join(',')],
   comments: (entityType, entityId, userId) => ['comments', entityType, entityId, userId],
   charts: (entityType, limit) => ['charts', entityType, limit],
   activity: (limit, scope = 'personalized', userId) => ['activity', scope, limit, userId],

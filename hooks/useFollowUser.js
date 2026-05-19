@@ -3,7 +3,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { queryKeys } from '../api/queryKeys';
+import { invalidateHomeFeedForUser } from '../api/queryClient';
 import { getApiErrorMessage } from '../utils/errors';
+import { getUserId } from '../utils/normalizers';
 
 export const useFollowUser = (profileId) => {
   const { axiosInstance, user, setUser } = useContext(AuthContext);
@@ -29,7 +31,11 @@ export const useFollowUser = (profileId) => {
     },
     onSuccess: (response) => {
       showToast(response.data.message || 'Perfil actualizado.');
-      queryClient.invalidateQueries({ queryKey: queryKeys.followingDetails(user?.following || []) });
+      const userId = getUserId(user);
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.followingDetails(userId, user?.following || []),
+      });
+      invalidateHomeFeedForUser(queryClient, userId);
     },
     onError: (error, _shouldFollow, context) => {
       if (context?.previousUser) setUser(context.previousUser);

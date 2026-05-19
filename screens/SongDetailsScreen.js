@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useEffect, useContext, useRef } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import { DetailSkeleton } from '../components/Skeleton';
 import { queryKeys } from '../api/queryKeys';
 import { useToast } from '../context/ToastContext';
 import { useFavorites } from '../hooks/useFavorites';
+import { useEntityDetailUiState } from '../hooks/useEntityDetailUiState';
 import { useRating } from '../hooks/useRating';
 import { getApiErrorMessage } from '../utils/errors';
 import { applyRatingDistributionChange, distributionWithUserFallback, hasRatingDistribution } from '../utils/ratingDistribution';
@@ -41,23 +42,7 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
 
   const songId = route?.params?.songId;
 
-  const [songData, setSongData] = useState(null);
-  const [isFavorite, setIsFavorite] = useState(false);
-  const [userRating, setUserRating] = useState(0);
-  const [averageRating, setAverageRating] = useState(0);
-  const [ratingCount, setRatingCount] = useState(0);
-  const [ratingDistribution, setRatingDistribution] = useState({});
-  const [showReviewPrompt, setShowReviewPrompt] = useState(false);
-
   const { favorites, toggleFavorite } = useFavorites();
-  const userRatingQuery = useRating({
-    entityType: 'song',
-    entityId: songId,
-    enabled: false,
-    name: songData?.name,
-    image: songData?.cover_image,
-    artist: songData?.artists?.join(', '),
-  });
 
   const songDetailsQuery = useQuery({
     queryKey: queryKeys.songDetails(songId),
@@ -68,22 +53,38 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
     },
   });
 
+  const {
+    entityData: songData,
+    isFavorite,
+    setIsFavorite,
+    userRating,
+    setUserRating,
+    averageRating,
+    setAverageRating,
+    ratingCount,
+    setRatingCount,
+    ratingDistribution,
+    setRatingDistribution,
+    showReviewPrompt,
+    setShowReviewPrompt,
+    isDetailReady,
+  } = useEntityDetailUiState(songId, songDetailsQuery);
+
+  const userRatingQuery = useRating({
+    entityType: 'song',
+    entityId: songId,
+    enabled: false,
+    name: songData?.name,
+    image: songData?.cover_image,
+    artist: songData?.artists?.join(', '),
+  });
+
   useEffect(() => {
     if (!songId) {
       showToast('No se proporcionó el ID de la canción.');
       navigation.goBack();
     }
   }, [navigation, songId, showToast]);
-
-  useEffect(() => {
-    if (!songDetailsQuery.data) return;
-    setSongData(songDetailsQuery.data);
-    setAverageRating(songDetailsQuery.data.averageRating || 0);
-    setRatingCount(songDetailsQuery.data.ratingCount || 0);
-    setRatingDistribution(songDetailsQuery.data.ratingDistribution || {});
-    setUserRating(songDetailsQuery.data.userRating || 0);
-    setIsFavorite(Boolean(songDetailsQuery.data.isFavorite));
-  }, [songDetailsQuery.data]);
 
   useEffect(() => {
     Animated.spring(promptScale, {
@@ -194,7 +195,7 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
     commentRef.current?.open();
   };
 
-  if (!songData) {
+  if (!isDetailReady) {
     return <DetailSkeleton />;
   }
 

@@ -40,5 +40,15 @@ export const useCompatNavigation = () => {
 
 export const useCompatRoute = () => {
   const params = useLocalSearchParams();
-  return useMemo(() => ({ params }), [params]);
+  const {
+    albumId,
+    songId,
+    artistId,
+    profileId,
+    artistName,
+  } = params;
+  return useMemo(
+    () => ({ params }),
+    [albumId, artistId, artistName, profileId, songId, params]
+  );
 };

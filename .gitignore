@@ -8,4 +8,6 @@ yarn-debug.log*
 yarn-error.log*
 assets/video-backup/
 .agents/
+.opencode/
+session-*.md
 skills-lock.json

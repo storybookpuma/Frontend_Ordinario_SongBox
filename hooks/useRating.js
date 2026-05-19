@@ -2,6 +2,7 @@ import { useContext } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
 import { queryKeys } from '../api/queryKeys';
+import { invalidateHomeFeedForUser } from '../api/queryClient';
 import { useToast } from '../context/ToastContext';
 import { getApiErrorMessage } from '../utils/errors';
 import { getUserId } from '../utils/normalizers';
@@ -30,6 +31,7 @@ export const useRating = ({ entityType, entityId, name, image, artist, enabled =
     queryClient.invalidateQueries({ queryKey: detailsQueryKey });
     queryClient.invalidateQueries({ queryKey: ['charts', entityType], exact: false });
     queryClient.invalidateQueries({ queryKey: ['activity'], exact: false });
+    invalidateHomeFeedForUser(queryClient, userId);
   };
 
   const updateDetailsRatingCache = (summary) => {

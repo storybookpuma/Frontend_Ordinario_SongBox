@@ -55,6 +55,14 @@ export default function ProfileScreen({ navigation }) {
   const [shouldRenderTop3Share, setShouldRenderTop3Share] = useState(false);
 
   useEffect(() => {
+    spotifySyncStarted.current = false;
+    setNewUsername(user?.username || '');
+    setIsEditingUsername(false);
+    setShouldRenderProfileShare(false);
+    setShouldRenderTop3Share(false);
+  }, [entityId, user?.username]);
+
+  useEffect(() => {
     const refreshUser = async () => {
       if (!user || entityId || !axiosInstance) return;
 
@@ -106,7 +114,7 @@ export default function ProfileScreen({ navigation }) {
     data: followingUsers = [],
     isLoading: isLoadingFollowing,
   } = useQuery({
-    queryKey: queryKeys.followingDetails(followingIds),
+    queryKey: queryKeys.followingDetails(entityId, followingIds),
     enabled: Boolean(axiosInstance && followingIds.length > 0),
     queryFn: async () => {
       const response = await axiosInstance.post('/get_following_details', { ids: followingIds });

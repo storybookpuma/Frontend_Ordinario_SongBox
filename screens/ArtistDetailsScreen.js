@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useEffect, useContext, useRef } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import { DetailSkeleton } from '../components/Skeleton';
 import { queryKeys } from '../api/queryKeys';
 import { useToast } from '../context/ToastContext';
 import { useFavorites } from '../hooks/useFavorites';
+import { useEntityDetailUiState } from '../hooks/useEntityDetailUiState';
 import { useRating } from '../hooks/useRating';
 import { getApiErrorMessage } from '../utils/errors';
 import { applyRatingDistributionChange, distributionWithUserFallback, hasRatingDistribution } from '../utils/ratingDistribution';
@@ -40,23 +41,7 @@ const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
 
   const artistId = route?.params?.artistId;
 
-  const [artistData, setArtistData] = useState(null);
-  const [isFavorite, setIsFavorite] = useState(false);
-  const [userRating, setUserRating] = useState(0);
-  const [averageRating, setAverageRating] = useState(0);
-  const [ratingCount, setRatingCount] = useState(0);
-  const [ratingDistribution, setRatingDistribution] = useState({});
-  const [showReviewPrompt, setShowReviewPrompt] = useState(false);
-
   const { favorites, toggleFavorite } = useFavorites();
-  const userRatingQuery = useRating({
-    entityType: 'artist',
-    entityId: artistId,
-    enabled: false,
-    name: artistData?.artist?.name,
-    image: artistData?.artist?.image,
-    artist: artistData?.artist?.name,
-  });
 
   const artistDetailsQuery = useQuery({
     queryKey: queryKeys.artistDetails(artistId),
@@ -67,19 +52,37 @@ const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
     },
   });
 
+  const {
+    entityData: artistData,
+    isFavorite,
+    setIsFavorite,
+    userRating,
+    setUserRating,
+    averageRating,
+    setAverageRating,
+    ratingCount,
+    setRatingCount,
+    ratingDistribution,
+    setRatingDistribution,
+    showReviewPrompt,
+    setShowReviewPrompt,
+    isDetailReady,
+  } = useEntityDetailUiState(artistId, artistDetailsQuery, 'artist');
+
+  const userRatingQuery = useRating({
+    entityType: 'artist',
+    entityId: artistId,
+    enabled: false,
+    name: artistData?.artist?.name,
+    image: artistData?.artist?.image,
+    artist: artistData?.artist?.name,
+  });
+
   useEffect(() => {
     if (!artistId) {
       showToast('No se proporcionó el ID del artista.');
-      return;
     }
-    if (!artistDetailsQuery.data) return;
-    setArtistData(artistDetailsQuery.data);
-    setAverageRating(artistDetailsQuery.data.artist.averageRating || 0);
-    setRatingCount(artistDetailsQuery.data.artist.ratingCount || 0);
-    setRatingDistribution(artistDetailsQuery.data.artist.ratingDistribution || {});
-    setUserRating(artistDetailsQuery.data.artist.userRating || 0);
-    setIsFavorite(Boolean(artistDetailsQuery.data.artist.isFavorite));
-  }, [artistDetailsQuery.data, artistId, showToast]);
+  }, [artistId, showToast]);
 
   useEffect(() => {
     Animated.spring(promptScale, {
@@ -175,7 +178,7 @@ const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
     commentRef.current?.open();
   };
 
-  if (!artistData) {
+  if (!isDetailReady) {
     return <DetailSkeleton />;
   }
 

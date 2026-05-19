@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useContext, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useContext, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,10 +15,15 @@ import { useQuery } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
 import LoadingScreen from '../components/LoadingScreen';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import CoverImage from '../components/CoverImage';
 import { SkeletonCard, SkeletonList } from '../components/Skeleton';
 import { getUserId, normalizeAlbum, normalizeArtist, normalizeSong, resolveImageUrl } from '../utils/normalizers';
 import { queryKeys } from '../api/queryKeys';
+import {
+  HOME_FEED_STALE_MS,
+  readCachedHomeFeed,
+  writeCachedHomeFeed,
+} from '../utils/homeFeedCache';
 import { useToast } from '../context/ToastContext';
 import { openYouTubeUrl } from '../utils/externalLinks';
 
@@ -29,29 +34,26 @@ const DATA = [
   { label: "UTOPIA", title: "UTOPIA", artist: "Travis Scott", imageSource: require('../assets/travis.png') },
 ];
 
-const getHomeCacheKey = (userId) => `homeSpotifyFeed:v4:${userId}`;
-const getLegacyHomeCacheKeys = (userId) => [`homeSpotifyFeed:v3:${userId}`, `homeSpotifyFeed:v2:${userId}`];
-
-const readCachedHomeFeed = async (userId) => {
-  let cached = await AsyncStorage.getItem(getHomeCacheKey(userId));
-  if (!cached) {
-    for (const key of getLegacyHomeCacheKeys(userId)) {
-      cached = await AsyncStorage.getItem(key);
-      if (cached) break;
-    }
-  }
-  if (!cached) return null;
-  return JSON.parse(cached);
+const EMPTY_HOME_SECTIONS = {
+  newsData: [],
+  artistsData: [],
+  videosData: [],
+  recentlyListenedData: [],
+  moreAlbumsData: [],
+  moreArtistsData: [],
+  topRatedData: [],
+  activityData: [],
 };
 
 const formatAlbum = (album) => {
   const normalizedAlbum = normalizeAlbum(album);
+  const hasImage = normalizedAlbum.cover_image && typeof normalizedAlbum.cover_image === 'string' && normalizedAlbum.cover_image.startsWith('http');
 
   return {
     id: normalizedAlbum.id,
     title: normalizedAlbum.name,
     artist: normalizedAlbum.artist,
-    imageSource: normalizedAlbum.cover_image ? { uri: normalizedAlbum.cover_image } : require('../assets/joji.jpg'),
+    imageSource: hasImage ? { uri: normalizedAlbum.cover_image } : null,
     release_date: normalizedAlbum.release_date,
     total_tracks: normalizedAlbum.total_tracks,
     type: normalizedAlbum.type,
@@ -61,19 +63,21 @@ const formatAlbum = (album) => {
 
 const formatArtist = (artist) => {
   const normalizedArtist = normalizeArtist(artist);
+  const hasImage = normalizedArtist.image && typeof normalizedArtist.image === 'string' && normalizedArtist.image.startsWith('http');
 
   return {
     id: normalizedArtist.id,
     name: normalizedArtist.name,
     genres: normalizedArtist.genres.length > 0 ? normalizedArtist.genres.join(', ') : null,
     popularity: normalizedArtist.popularity,
-    imageSource: normalizedArtist.image ? { uri: normalizedArtist.image } : require('../assets/joji.jpg'),
+    imageSource: hasImage ? { uri: normalizedArtist.image } : null,
     url: normalizedArtist.url,
   };
 };
 
 const formatSong = (song) => {
   const normalizedSong = normalizeSong(song);
+  const hasImage = normalizedSong.cover_image && typeof normalizedSong.cover_image === 'string' && normalizedSong.cover_image.startsWith('http');
 
   return {
     id: normalizedSong.id,
@@ -81,8 +85,30 @@ const formatSong = (song) => {
     artist: normalizedSong.artist,
     album: normalizedSong.album,
     url: normalizedSong.url,
-    imageSource: normalizedSong.cover_image ? { uri: normalizedSong.cover_image } : require('../assets/joji.jpg'),
+    imageSource: hasImage ? { uri: normalizedSong.cover_image } : null,
   };
+};
+
+const buildHomeFeedFromPayload = (payload) => ({
+  newsData: (payload.albums || []).map(formatAlbum),
+  artistsData: (payload.artists || []).map(formatArtist),
+  videosData: [],
+  recentlyListenedData: (payload.recentlyListened || []).map(formatSong),
+  moreAlbumsData: (payload.moreAlbums || []).map(formatAlbum),
+  moreArtistsData: (payload.moreArtists || []).map(formatArtist),
+  topRated: payload.topRated || [],
+  activity: payload.activity || [],
+});
+
+const applyHomeFeedToSections = (feed, setters) => {
+  setters.setNewsData(feed.newsData || []);
+  setters.setArtistsData(feed.artistsData || []);
+  setters.setVideosData(feed.videosData || []);
+  setters.setRecentlyListenedData(feed.recentlyListenedData || []);
+  setters.setMoreAlbumsData(feed.moreAlbumsData || []);
+  setters.setMoreArtistsData(feed.moreArtistsData || []);
+  setters.setTopRatedData(feed.topRated || feed.topRatedData || []);
+  setters.setActivityData(feed.activity || feed.activityData || []);
 };
 
 export default function HomeScreen({ navigation }) {
@@ -90,17 +116,15 @@ export default function HomeScreen({ navigation }) {
   const { showToast } = useToast();
   const { width: screenWidth } = useWindowDimensions();
   const userId = getUserId(user);
-  const homeCacheKey = getHomeCacheKey(userId);
 
   const [activeTab, setActiveTab] = useState("News");
-  const [newsData, setNewsData] = useState([]);
-  const [artistsData, setArtistsData] = useState([]);
-  const [videosData, setVideosData] = useState([]);
-  const [moreAlbumsData, setMoreAlbumsData] = useState([]);
-  const [moreArtistsData, setMoreArtistsData] = useState([]);
-  const [topRatedData, setTopRatedData] = useState([]);
-  const [activityData, setActivityData] = useState([]);
-  const [isFetchingHome, setIsFetchingHome] = useState(false);
+  const [newsData, setNewsData] = useState(EMPTY_HOME_SECTIONS.newsData);
+  const [artistsData, setArtistsData] = useState(EMPTY_HOME_SECTIONS.artistsData);
+  const [videosData, setVideosData] = useState(EMPTY_HOME_SECTIONS.videosData);
+  const [moreAlbumsData, setMoreAlbumsData] = useState(EMPTY_HOME_SECTIONS.moreAlbumsData);
+  const [moreArtistsData, setMoreArtistsData] = useState(EMPTY_HOME_SECTIONS.moreArtistsData);
+  const [topRatedData, setTopRatedData] = useState(EMPTY_HOME_SECTIONS.topRatedData);
+  const [activityData, setActivityData] = useState(EMPTY_HOME_SECTIONS.activityData);
   const [tabData, setTabData] = useState([]);
   const carouselRef = useRef();
   const tabScrollViewRef = useRef();
@@ -110,9 +134,21 @@ export default function HomeScreen({ navigation }) {
   const carouselIndexRef = useRef(0);
   const isUserInteractingCarousel = useRef(false);
 
+  const sectionSetters = useMemo(() => ({
+    setNewsData,
+    setArtistsData,
+    setVideosData,
+    setRecentlyListenedData,
+    setMoreAlbumsData,
+    setMoreArtistsData,
+    setTopRatedData,
+    setActivityData,
+  }), []);
+
   const homeFeedQuery = useQuery({
     queryKey: queryKeys.homeFeed(userId),
     enabled: Boolean(userId && axiosInstance),
+    staleTime: HOME_FEED_STALE_MS,
     queryFn: async () => {
       if (!axiosInstance) {
         throw new Error("axiosInstance no está definido en el contexto.");
@@ -129,109 +165,47 @@ export default function HomeScreen({ navigation }) {
       }
 
       const homeFeed = {
-        newsData: (payload.albums || []).map(formatAlbum),
-        artistsData: (payload.artists || []).map(formatArtist),
-        videosData: [],
-        recentlyListenedData: (payload.recentlyListened || []).map(formatSong),
-        moreAlbumsData: (payload.moreAlbums || []).map(formatAlbum),
-        moreArtistsData: (payload.moreArtists || []).map(formatArtist),
-        topRated: payload.topRated || [],
-        activity: payload.activity || [],
+        ...buildHomeFeedFromPayload(payload),
+        ownerUserId: userId,
         cachedAt: Date.now(),
       };
 
-      await AsyncStorage.setItem(homeCacheKey, JSON.stringify(homeFeed));
+      await writeCachedHomeFeed(userId, homeFeed);
       return homeFeed;
     },
   });
 
   useEffect(() => {
-    if (!homeFeedQuery.data) return;
-    setNewsData(homeFeedQuery.data.newsData || []);
-    setArtistsData(homeFeedQuery.data.artistsData || []);
-    setVideosData(homeFeedQuery.data.videosData || []);
-    setRecentlyListenedData(homeFeedQuery.data.recentlyListenedData || []);
-    setMoreAlbumsData(homeFeedQuery.data.moreAlbumsData || []);
-    setMoreArtistsData(homeFeedQuery.data.moreArtistsData || []);
-    setTopRatedData(homeFeedQuery.data.topRated || []);
-    setActivityData(homeFeedQuery.data.activity || []);
-  }, [homeFeedQuery.data]);
-
-  const fetchData = useCallback(async () => {
-    setIsFetchingHome(true);
-    try {
-      if (!axiosInstance) {
-        throw new Error("axiosInstance no está definido en el contexto.");
-      }
-
-      const response = await axiosInstance.get('/mobile/home', { timeout: 12000 });
-      const payload = response.data || {};
-
-      const albums = payload.albums || [];
-      const artists = payload.artists || [];
-      const recentlyListened = payload.recentlyListened || [];
-      const moreAlbums = payload.moreAlbums || [];
-      const moreArtists = payload.moreArtists || [];
-
-      const formattedNewsData = albums.map(formatAlbum);
-      setNewsData(formattedNewsData);
-
-      const formattedArtistsData = artists.map(formatArtist);
-      setArtistsData(formattedArtistsData);
-
-      const formattedRecentlyListened = recentlyListened.map(formatSong);
-      setRecentlyListenedData(formattedRecentlyListened);
-
-      const formattedMoreAlbumsData = moreAlbums.map(formatAlbum);
-      const formattedMoreArtistsData = moreArtists.map(formatArtist);
-      setMoreAlbumsData(formattedMoreAlbumsData);
-      setMoreArtistsData(formattedMoreArtistsData);
-
-      await AsyncStorage.setItem(homeCacheKey, JSON.stringify({
-        newsData: formattedNewsData,
-        artistsData: formattedArtistsData,
-        videosData: [],
-        recentlyListenedData: formattedRecentlyListened,
-        moreAlbumsData: formattedMoreAlbumsData,
-        moreArtistsData: formattedMoreArtistsData,
-        topRated: payload.topRated || [],
-        activity: payload.activity || [],
-        cachedAt: Date.now(),
-      }));
-
-    } catch (_error) {
-      showToast("Hubo un problema al cargar los datos. Intenta nuevamente.");
-    } finally {
-      setIsFetchingHome(false);
-    }
-  }, [axiosInstance, homeCacheKey, showToast]);
+    applyHomeFeedToSections(EMPTY_HOME_SECTIONS, sectionSetters);
+  }, [userId, sectionSetters]);
 
   useEffect(() => {
-    const initialize = async () => {
-      try {
-        if (!user) {
-          return;
-        }
-        const cachedHomeFeed = await readCachedHomeFeed(userId);
+    if (!userId) return;
 
-        if (cachedHomeFeed) {
-          const parsedCache = cachedHomeFeed;
-          setNewsData(parsedCache.newsData || []);
-          setArtistsData(parsedCache.artistsData || []);
-          setVideosData(parsedCache.videosData || []);
-          setRecentlyListenedData(parsedCache.recentlyListenedData || []);
-          setMoreAlbumsData(parsedCache.moreAlbumsData || []);
-          setMoreArtistsData(parsedCache.moreArtistsData || []);
-          setTopRatedData(parsedCache.topRated || []);
-          setActivityData(parsedCache.activity || []);
+    let cancelled = false;
+    const hydrateFromAsyncStorage = async () => {
+      try {
+        const cached = await readCachedHomeFeed(userId);
+        if (cancelled || !cached) return;
+        applyHomeFeedToSections(cached, sectionSetters);
+      } catch {
+        if (!cancelled) {
+          showToast('Hubo un problema al inicializar la aplicación. Intenta nuevamente.');
         }
-      } catch (_error) {
-        showToast("Hubo un problema al inicializar la aplicación. Intenta nuevamente.");
       }
     };
 
-    initialize();
-  }, [fetchData, homeCacheKey, user, userId, showToast]);
+    hydrateFromAsyncStorage();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, sectionSetters, showToast]);
+
+  useEffect(() => {
+    if (!userId || !homeFeedQuery.data) return;
+    if (homeFeedQuery.data.ownerUserId && String(homeFeedQuery.data.ownerUserId) !== String(userId)) return;
+    applyHomeFeedToSections(homeFeedQuery.data, sectionSetters);
+  }, [userId, homeFeedQuery.data, sectionSetters]);
 
   useEffect(() => {
     if (activeTab === "News") {
@@ -310,7 +284,7 @@ export default function HomeScreen({ navigation }) {
       style={[styles.largeContentCard, index % 3 === 0 && styles.largeContentCardWide]}
       onPress={() => item.id && navigation.navigate('AlbumDetailsScreen', { albumId: item.id })}
     >
-      <Image source={item.imageSource} style={[styles.largeContentImage, index % 3 === 0 && styles.largeContentImageWide]} />
+      <CoverImage source={item.imageSource} style={[styles.largeContentImage, index % 3 === 0 && styles.largeContentImageWide]} />
       <Text style={styles.largeContentTitle} numberOfLines={2}>{item.title}</Text>
       <Text style={styles.largeContentSubtitle} numberOfLines={1}>{item.artist}</Text>
       {item.release_date ? <Text style={styles.contentMeta}>{item.release_date}</Text> : null}
@@ -326,7 +300,7 @@ export default function HomeScreen({ navigation }) {
         artistName: item.name,
       })}
     >
-      <Image source={item.imageSource} style={styles.artistCircleImage} />
+      <CoverImage source={item.imageSource} style={styles.artistCircleImage} />
       <Text style={styles.artistCircleName} numberOfLines={2}>{item.name}</Text>
       {item.genres ? <Text style={styles.artistCircleMeta} numberOfLines={1}>{item.genres}</Text> : null}
       {item.popularity ? <Text style={styles.contentMeta}>{item.popularity}% popularity</Text> : null}
@@ -344,7 +318,7 @@ export default function HomeScreen({ navigation }) {
   const renderHorizontalSection = (title, data, renderItem, emptyText) => (
     <View style={styles.extraSection}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      {(isFetchingHome || homeFeedQuery.isFetching) && data.length === 0 ? (
+      {homeFeedQuery.isFetching && data.length === 0 ? (
         renderCardSkeletonRow()
       ) : data.length > 0 ? (
         <FlatList
@@ -432,7 +406,7 @@ export default function HomeScreen({ navigation }) {
                 <Text style={styles.albumArtist}>{item.artist}</Text>
               </View>
               <View style={styles.albumImageContainer}>
-                <Image source={item.imageSource} style={styles.albumImage} />
+                <CoverImage source={item.imageSource} style={styles.albumImage} />
               </View>
             </View>
           ))}
@@ -477,7 +451,7 @@ export default function HomeScreen({ navigation }) {
                 }
               }}
             >
-              <Image source={item.imageSource} style={styles.artistImage} />
+              <CoverImage source={item.imageSource} style={styles.artistImage} />
               <Text style={styles.artistCardTitle}>{item.title || item.name}</Text>
               {(activeTab === "News" || activeTab === "Videos") && item.artist && (
                 <Text style={styles.artistCardName}>{item.artist}</Text>
@@ -497,7 +471,7 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.recentlyListenedContainer}>
           <Text style={styles.sectionTitle}>Recently Listened</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentlyListenedScrollContent}>
-            {(isFetchingHome || homeFeedQuery.isFetching) && recentlyListenedData.length === 0 ? Array.from({ length: 4 }).map((_, index) => (
+            {homeFeedQuery.isFetching && recentlyListenedData.length === 0 ? Array.from({ length: 4 }).map((_, index) => (
               <SkeletonCard key={index} style={[styles.songCard, { width: recentlyListenedCardWidth }]} imageStyle={styles.songImage} />
             )) : recentlyListenedData.map((song, index) => (
               <TouchableOpacity
@@ -514,7 +488,7 @@ export default function HomeScreen({ navigation }) {
                   }
                 }}
               >
-                <Image source={song.imageSource} style={styles.songImage} />
+                <CoverImage source={song.imageSource} style={styles.songImage} />
                 <View style={styles.songInfoContainerRecentlyListened}>
                   <Text style={styles.songTitleRecentlyListened} numberOfLines={1}>{song.title}</Text>
                   <Text style={styles.songArtistRecentlyListened} numberOfLines={1}>{song.artist}</Text>
@@ -547,7 +521,7 @@ export default function HomeScreen({ navigation }) {
                   }}
                 >
                   {item.image ? (
-                    <Image source={{ uri: item.image }} style={styles.chartImage} contentFit="cover" cachePolicy="memory-disk" />
+                    <CoverImage source={item.image ? { uri: item.image } : null} style={styles.chartImage} />
                   ) : (
                     <View style={[styles.chartImage, { backgroundColor: '#2A2A2A', alignItems: 'center', justifyContent: 'center' }]}>
                       <Text style={styles.chartRankSmall}>#{index + 1}</Text>
