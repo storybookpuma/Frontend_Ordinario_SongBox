@@ -157,7 +157,7 @@ function CommentActionMenu({ visible, comment, userId, menuY, onClose, onDelete 
   );
 }
 
-const CommentSection = forwardRef(function CommentSection({ entityType, entityId, userRating }, ref) {
+const CommentSection = forwardRef(function CommentSection({ entityType, entityId, userRating, initialCount = 0 }, ref) {
   const { axiosInstance, user } = useContext(AuthContext);
   const { showToast } = useToast();
   const queryClient = useQueryClient();
@@ -169,6 +169,7 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
   const [menuY, setMenuY] = useState(SCREEN_HEIGHT * 0.45);
   const [expandedReplies, setExpandedReplies] = useState({});
   const [replyData, setReplyData] = useState({});
+  const [localCount, setLocalCount] = useState(initialCount || 0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const inputRef = useRef(null);
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -186,6 +187,7 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
       });
       return {
         comments: response.data.comments || [],
+        totalComments: response.data.pagination?.total_comments ?? response.data.total_comments ?? 0,
         nextCursor: response.data.nextCursor || response.data.pagination?.nextCursor || null,
         hasMore: Boolean(response.data.hasMore || response.data.pagination?.hasMore),
       };
@@ -196,6 +198,17 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
   });
 
   const comments = commentsQuery.data?.pages.flatMap((page) => page.comments || []) || [];
+
+  useEffect(() => {
+    setLocalCount(initialCount || 0);
+  }, [entityId, initialCount]);
+
+  useEffect(() => {
+    const total = commentsQuery.data?.pages?.[0]?.totalComments;
+    if (typeof total === 'number') {
+      setLocalCount(total);
+    }
+  }, [commentsQuery.data]);
 
   const postMutation = useMutation({
     mutationFn: ({ text, parentId }) => {
@@ -235,6 +248,7 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
         });
         return;
       }
+      setLocalCount((current) => current + 1);
       queryClient.setQueryData(queryKey, (current) => {
         if (!current?.pages?.length) return current;
         return {
@@ -257,7 +271,11 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
 
   const deleteMutation = useMutation({
     mutationFn: (commentId) => axiosInstance.delete(`/${entityType}/${entityId}/comments/${commentId}`),
-    onSuccess: () => {
+    onSuccess: (_response, commentId) => {
+      const deletedRootComment = comments.some((comment) => comment._id === commentId);
+      if (deletedRootComment) {
+        setLocalCount((current) => Math.max(0, current - 1));
+      }
       queryClient.invalidateQueries({ queryKey });
     },
     onError: () => {
@@ -374,7 +392,7 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
     setExpandedReplies((prev) => ({ ...prev, [commentId]: true }));
   };
 
-  const count = commentsQuery.data?.pages?.[0]?.pagination?.total_comments ?? 0;
+  const count = localCount;
   const isInitialLoading = commentsQuery.isLoading;
   const shouldHideEmptyState = keyboardHeight > 0 || commentText.trim().length > 0;
 

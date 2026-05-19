@@ -323,6 +323,7 @@ const AlbumDetailsScreen = ({ route, navigation: navigationProp }) => {
             entityType="album"
             entityId={albumData.id}
             userRating={userRating}
+            initialCount={albumData.commentCount || 0}
           />
         </View>
 

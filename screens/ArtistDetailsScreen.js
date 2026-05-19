@@ -30,6 +30,50 @@ import { applyRatingDistributionChange, distributionWithUserFallback, hasRatingD
 
 const HEADER_MAX = 340;
 
+function ArtistReleaseSection({ title, releases, navigation, showToast }) {
+  if (!releases || releases.length === 0) return null;
+  return (
+    <View style={styles.card}>
+      <View style={styles.releaseHeaderRow}>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <Text style={styles.releaseCount}>{releases.length}</Text>
+      </View>
+      <View style={styles.albumsGrid}>
+        {releases.map((album, index) => (
+          <TouchableOpacity
+            key={album.id || `${title}-${index}`}
+            style={[
+              styles.albumItem,
+              index % 2 === 0 ? styles.albumItemLarge : styles.albumItemSmall,
+            ]}
+            onPress={() => {
+              const targetId = album?.id || album?._id || album?.album_id;
+              if (!targetId) {
+                showToast('Album ID not available.');
+                return;
+              }
+              navigation.navigate('AlbumDetailsScreen', { albumId: targetId });
+            }}
+          >
+            <Image
+              source={{ uri: album.image || album.cover_image }}
+              style={[
+                styles.albumCover,
+                index % 2 === 0 ? styles.albumCoverLarge : styles.albumCoverSmall,
+              ]}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={180}
+            />
+            <Text style={styles.albumName} numberOfLines={2}>{album.title || album.name}</Text>
+            <Text style={styles.albumYear}>{album.release_date}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
   const fallbackNavigation = useNavigation();
   const navigation = navigationProp || fallbackNavigation;
@@ -247,8 +291,8 @@ const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
             <Text style={styles.statLabel}>Followers</Text>
           </View>
           <View style={styles.stat}>
-            <Text style={styles.statValue}>{artistData.albums?.length || 0}</Text>
-            <Text style={styles.statLabel}>Albums</Text>
+            <Text style={styles.statValue}>{(artistData.albums?.length || 0) + (artistData.singles?.length || 0)}</Text>
+            <Text style={styles.statLabel}>Releases</Text>
           </View>
         </View>
 
@@ -285,46 +329,8 @@ const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
           )}
         </View>
 
-        {/* Albums */}
-        {artistData.albums && artistData.albums.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Albums</Text>
-            <View style={styles.albumsGrid}>
-              {artistData.albums.map((album, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.albumItem,
-                    index % 2 === 0 ? styles.albumItemLarge : styles.albumItemSmall,
-                  ]}
-                  onPress={() => {
-                    const targetId = album?.id || album?._id || album?.album_id;
-                    if (!targetId) {
-                      showToast('Album ID not available.');
-                      return;
-                    }
-                    navigation.navigate('AlbumDetailsScreen', {
-                      albumId: targetId,
-                    });
-                  }}
-                >
-                  <Image
-                    source={{ uri: album.image }}
-                    style={[
-                      styles.albumCover,
-                      index % 2 === 0 ? styles.albumCoverLarge : styles.albumCoverSmall,
-                    ]}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                    transition={180}
-                  />
-                  <Text style={styles.albumName} numberOfLines={2}>{album.title}</Text>
-                  <Text style={styles.albumYear}>{album.release_date}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
+        <ArtistReleaseSection title="Albums" releases={artistData.albums} navigation={navigation} showToast={showToast} />
+        <ArtistReleaseSection title="Singles & EPs" releases={artistData.singles} navigation={navigation} showToast={showToast} />
 
         {/* Comments */}
         <View style={styles.card}>
@@ -333,6 +339,7 @@ const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
             entityType="artist"
             entityId={artistData.artist.id}
             userRating={userRating}
+            initialCount={artistData.artist.commentCount || 0}
           />
         </View>
 
@@ -533,6 +540,21 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '700',
     marginBottom: 14,
+  },
+  releaseHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  releaseCount: {
+    color: '#F4E7C5',
+    fontSize: 13,
+    fontWeight: '800',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 99,
+    backgroundColor: 'rgba(244,231,197,0.12)',
   },
   ratingMeta: {
     flexDirection: 'row',

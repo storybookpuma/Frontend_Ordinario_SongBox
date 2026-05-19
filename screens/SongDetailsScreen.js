@@ -348,6 +348,7 @@ export default function SongDetailsScreen({ route, navigation: navigationProp })
             entityType="song"
             entityId={songData.id}
             userRating={userRating}
+            initialCount={songData.commentCount || 0}
           />
         </View>
 
