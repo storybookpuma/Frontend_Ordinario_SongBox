@@ -1,10 +1,11 @@
-import React, { useEffect, useContext, useRef, useState } from 'react';
+import React, { useEffect, useContext, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Animated,
+  FlatList,
 } from 'react-native';
 import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/FontAwesome';
@@ -30,27 +31,36 @@ import { applyRatingDistributionChange, distributionWithUserFallback, hasRatingD
 
 const HEADER_MAX = 340;
 
-function ArtistReleaseSection({ title, releases, navigation, showToast }) {
-  const [expanded, setExpanded] = useState(false);
+function ArtistReleaseSection({ title, subtitle, releaseType, releases, artistId, artistName, navigation, showToast }) {
   if (!releases || releases.length === 0) return null;
-  const visibleReleases = expanded ? releases : releases.slice(0, 8);
+  const previewReleases = releases.slice(0, 8);
   return (
     <View style={styles.card}>
       <View style={styles.releaseHeaderRow}>
         <View>
           <Text style={styles.cardTitle}>{title}</Text>
-          <Text style={styles.releaseSubtitle}>{title === 'Albums' ? 'Full-length projects' : 'Singles, EPs, and shorter releases'}</Text>
+          <Text style={styles.releaseSubtitle}>{subtitle}</Text>
         </View>
-        <Text style={styles.releaseCount}>{releases.length}</Text>
-      </View>
-      <View style={styles.albumsGrid}>
-        {visibleReleases.map((album, index) => (
+        <View style={styles.releaseHeaderActions}>
+          <Text style={styles.releaseCount}>{releases.length}</Text>
           <TouchableOpacity
-            key={album.id || `${title}-${index}`}
-            style={[
-              styles.albumItem,
-              index % 2 === 0 ? styles.albumItemLarge : styles.albumItemSmall,
-            ]}
+            style={styles.showAllButton}
+            onPress={() => navigation.navigate('ArtistReleasesScreen', { artistId, artistName, releaseType })}
+            activeOpacity={0.84}
+          >
+            <Text style={styles.showAllText}>Mostrar todos</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      <FlatList
+        horizontal
+        data={previewReleases}
+        keyExtractor={(item, index) => `${item.id || item.entityId || item.name}-${index}`}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.releaseCarousel}
+        renderItem={({ item: album }) => (
+          <TouchableOpacity
+            style={styles.releaseCarouselItem}
             onPress={() => {
               const targetId = album?.id || album?._id || album?.album_id;
               if (!targetId) {
@@ -62,10 +72,7 @@ function ArtistReleaseSection({ title, releases, navigation, showToast }) {
           >
             <Image
               source={{ uri: album.image || album.cover_image }}
-              style={[
-                styles.albumCover,
-                index % 2 === 0 ? styles.albumCoverLarge : styles.albumCoverSmall,
-              ]}
+              style={styles.releaseCarouselCover}
               contentFit="cover"
               cachePolicy="memory-disk"
               transition={180}
@@ -73,14 +80,8 @@ function ArtistReleaseSection({ title, releases, navigation, showToast }) {
             <Text style={styles.albumName} numberOfLines={2}>{album.title || album.name}</Text>
             <Text style={styles.albumYear}>{album.release_date}{album.total_tracks ? ` · ${album.total_tracks} tracks` : ''}</Text>
           </TouchableOpacity>
-        ))}
-      </View>
-      {releases.length > 8 ? (
-        <TouchableOpacity style={styles.showMoreReleasesButton} onPress={() => setExpanded((current) => !current)} activeOpacity={0.84}>
-          <Text style={styles.showMoreReleasesText}>{expanded ? 'Show less' : `Show ${releases.length - 8} more`}</Text>
-          <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={12} color="#F4E7C5" />
-        </TouchableOpacity>
-      ) : null}
+        )}
+      />
     </View>
   );
 }
@@ -340,8 +341,26 @@ const ArtistDetailsScreen = ({ route, navigation: navigationProp }) => {
           )}
         </View>
 
-        <ArtistReleaseSection title="Albums" releases={artistData.albums} navigation={navigation} showToast={showToast} />
-        <ArtistReleaseSection title="Singles & EPs" releases={artistData.singles} navigation={navigation} showToast={showToast} />
+        <ArtistReleaseSection
+          title="Albums"
+          subtitle="Full-length projects"
+          releaseType="albums"
+          releases={artistData.albums}
+          artistId={artistId}
+          artistName={artistData.artist.name}
+          navigation={navigation}
+          showToast={showToast}
+        />
+        <ArtistReleaseSection
+          title="Singles & EPs"
+          subtitle="Singles, EPs, and shorter releases"
+          releaseType="singles"
+          releases={artistData.singles}
+          artistId={artistId}
+          artistName={artistData.artist.name}
+          navigation={navigation}
+          showToast={showToast}
+        />
 
         {/* Comments */}
         <View style={styles.card}>
@@ -557,6 +576,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 14,
+    gap: 12,
+  },
+  releaseHeaderActions: {
+    alignItems: 'flex-end',
+    gap: 8,
   },
   releaseSubtitle: {
     color: '#AFA7B7',
@@ -573,6 +597,19 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 99,
     backgroundColor: 'rgba(244,231,197,0.12)',
+  },
+  showAllButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 99,
+    backgroundColor: 'rgba(244,231,197,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(244,231,197,0.16)',
+  },
+  showAllText: {
+    color: '#F4E7C5',
+    fontSize: 11,
+    fontWeight: '900',
   },
   ratingMeta: {
     flexDirection: 'row',
@@ -628,37 +665,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  albumsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+  releaseCarousel: {
+    paddingRight: 8,
+    gap: 14,
   },
-  albumItem: {
-    alignItems: 'center',
+  releaseCarouselItem: {
+    width: 150,
+    padding: 10,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.055)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
-  albumItemLarge: {
-    width: '55%',
-  },
-  albumItemSmall: {
-    width: '40%',
-    marginTop: 20,
-  },
-  albumCover: {
+  releaseCarouselCover: {
     width: '100%',
+    height: 130,
     borderRadius: 18,
     marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 14,
-    elevation: 4,
-  },
-  albumCoverLarge: {
-    height: 150,
-  },
-  albumCoverSmall: {
-    height: 110,
-    borderRadius: 14,
   },
   albumName: {
     fontSize: 13,
@@ -671,23 +694,6 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 2,
     textAlign: 'center',
-  },
-  showMoreReleasesButton: {
-    marginTop: 16,
-    paddingVertical: 11,
-    borderRadius: 18,
-    backgroundColor: 'rgba(244,231,197,0.09)',
-    borderWidth: 1,
-    borderColor: 'rgba(244,231,197,0.14)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  showMoreReleasesText: {
-    color: '#F4E7C5',
-    fontSize: 13,
-    fontWeight: '900',
   },
 
 });

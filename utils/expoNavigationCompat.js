@@ -12,6 +12,7 @@ const ROUTE_PATHS = {
   ProfileScreen: '/MainTabs/ProfileScreen',
   AlbumDetailsScreen: '/AlbumDetailsScreen',
   ArtistDetailsScreen: '/ArtistDetailsScreen',
+  ArtistReleasesScreen: '/ArtistReleasesScreen',
   SongDetailsScreen: '/SongDetailsScreen',
   UserDetailsScreen: '/UserDetailsScreen',
   ChartsScreen: '/ChartsScreen',
@@ -46,9 +47,10 @@ export const useCompatRoute = () => {
     artistId,
     profileId,
     artistName,
+    releaseType,
   } = params;
   return useMemo(
     () => ({ params }),
-    [albumId, artistId, artistName, profileId, songId, params]
+    [albumId, artistId, artistName, profileId, releaseType, songId, params]
   );
 };
