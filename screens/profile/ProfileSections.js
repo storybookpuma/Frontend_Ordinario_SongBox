@@ -12,10 +12,29 @@ const ProfileCarouselSkeleton = ({ styles }) => (
   </View>
 );
 
-export const FavoriteCarouselSection = React.memo(function FavoriteCarouselSection({ styles, title, titleStyle, data, isLoading, renderItem }) {
+export function CollapsibleProfileSection({ styles, title, subtitle, count, collapsed, onToggle, children }) {
   return (
-    <>
-      <Text style={titleStyle}>{title}</Text>
+    <View style={styles.profileSectionCard}>
+      <TouchableOpacity style={styles.profileSectionHeader} onPress={onToggle} activeOpacity={0.84}>
+        <View style={styles.profileSectionTitleWrap}>
+          <View style={styles.profileSectionKickerRow}>
+            <Text style={styles.profileSectionKicker}>{subtitle}</Text>
+            {typeof count === 'number' ? <Text style={styles.profileSectionCount}>{count}</Text> : null}
+          </View>
+          <Text style={styles.profileSectionTitle}>{title}</Text>
+        </View>
+        <View style={styles.profileSectionChevron}>
+          <Icon name={collapsed ? 'chevron-down' : 'chevron-up'} size={13} color="#F4E7C5" />
+        </View>
+      </TouchableOpacity>
+      {!collapsed ? children : null}
+    </View>
+  );
+}
+
+export const FavoriteCarouselSection = React.memo(function FavoriteCarouselSection({ styles, title, subtitle, count, data, isLoading, renderItem, collapsed, onToggle }) {
+  return (
+    <CollapsibleProfileSection styles={styles} title={title} subtitle={subtitle} count={count} collapsed={collapsed} onToggle={onToggle}>
       {isLoading ? (
         <ProfileCarouselSkeleton styles={styles} />
       ) : (
@@ -35,14 +54,13 @@ export const FavoriteCarouselSection = React.memo(function FavoriteCarouselSecti
           removeClippedSubviews={Platform.OS === 'android'}
         />
       )}
-    </>
+    </CollapsibleProfileSection>
   );
 });
 
-export const FollowingSection = React.memo(function FollowingSection({ styles, followingCount, followingUsers, isLoading, renderItem }) {
+export const FollowingSection = React.memo(function FollowingSection({ styles, followingCount, followingUsers, isLoading, renderItem, collapsed, onToggle }) {
   return (
-    <>
-      <Text style={styles.followingTitle}>People I Follow</Text>
+    <CollapsibleProfileSection styles={styles} title="Following" subtitle="Your listening circle" count={followingCount} collapsed={collapsed} onToggle={onToggle}>
       {isLoading ? (
         <SkeletonList count={2} itemStyle={styles.followingSkeletonItem} />
       ) : followingCount === 0 ? (
@@ -64,7 +82,7 @@ export const FollowingSection = React.memo(function FollowingSection({ styles, f
           removeClippedSubviews={Platform.OS === 'android'}
         />
       )}
-    </>
+    </CollapsibleProfileSection>
   );
 });
 
@@ -75,14 +93,10 @@ const BADGE_COLORS = {
   epic: '#FFD166',
 };
 
-export const BadgesSection = React.memo(function BadgesSection({ styles, badges }) {
+export const BadgesSection = React.memo(function BadgesSection({ styles, badges, collapsed, onToggle }) {
   if (!badges || badges.length === 0) return null;
   return (
-    <View style={styles.badgesCard}>
-      <View style={styles.badgesHeader}>
-        <Text style={styles.badgesTitle}>Taste Badges</Text>
-        <Text style={styles.badgesCount}>{badges.length}</Text>
-      </View>
+    <CollapsibleProfileSection styles={styles} title="Taste Badges" subtitle="Signals earned" count={badges.length} collapsed={collapsed} onToggle={onToggle}>
       <View style={styles.badgesGrid}>
         {badges.map((badge) => (
           <View key={badge.id} style={styles.badgePill}>
@@ -91,7 +105,7 @@ export const BadgesSection = React.memo(function BadgesSection({ styles, badges 
           </View>
         ))}
       </View>
-    </View>
+    </CollapsibleProfileSection>
   );
 });
 
@@ -177,6 +191,12 @@ export const Top3ShareCard = React.memo(function Top3ShareCard({
 export const TasteWallSection = React.memo(function TasteWallSection({ styles, data, navigation }) {
   const pinnedItems = data.top3Items || [];
   const recentFavorites = data.recentFavorites || [];
+  const sourceCounts = data.sourceCounts || {};
+  const primaryPinned = pinnedItems[0];
+  const secondaryPinned = pinnedItems.slice(1, 3);
+  const editorialLine = data.dominantType && data.dominantType !== 'None yet'
+    ? `Your wall is leaning into ${String(data.dominantType).toLowerCase()} right now.`
+    : 'Start saving, rating, and reviewing to shape this wall.';
 
   const openItem = (item) => {
     if (item.entityType === 'song') navigation.navigate('SongDetailsScreen', { songId: item.entityId });
@@ -186,19 +206,21 @@ export const TasteWallSection = React.memo(function TasteWallSection({ styles, d
 
   return (
     <View style={styles.tasteWallCard}>
+      <View style={styles.tasteWallAura} />
       <View style={styles.tasteWallHeader}>
         <View>
           <Text style={styles.tasteWallKicker}>Taste Wall</Text>
           <Text style={styles.tasteWallTitle}>{data.currentEra}</Text>
+          <Text style={styles.tasteWallSubtitle}>{editorialLine}</Text>
         </View>
         <View style={styles.tasteWallStamp}>
           <Text style={styles.tasteWallStampText}>{data.totalFavorites}</Text>
-          <Text style={styles.tasteWallStampLabel}>saves</Text>
+          <Text style={styles.tasteWallStampLabel}>signals</Text>
         </View>
       </View>
 
-      <View style={styles.tasteDnaRow}>
-        <View style={styles.tasteDnaPill}>
+      <View style={styles.tasteSignalRow}>
+        <View style={[styles.tasteDnaPill, styles.tasteSignalPillPrimary]}>
           <Text style={styles.tasteDnaValue}>{data.dominantType}</Text>
           <Text style={styles.tasteDnaLabel}>main lane</Text>
         </View>
@@ -206,16 +228,35 @@ export const TasteWallSection = React.memo(function TasteWallSection({ styles, d
           <Text style={styles.tasteDnaValue}>{pinnedItems.length || '...'}</Text>
           <Text style={styles.tasteDnaLabel}>pinned</Text>
         </View>
+        <View style={styles.tasteDnaPill}>
+          <Text style={styles.tasteDnaValue}>{sourceCounts.spotify_api || sourceCounts.favorite || sourceCounts.rating || 0}</Text>
+          <Text style={styles.tasteDnaLabel}>fresh</Text>
+        </View>
       </View>
 
       {pinnedItems.length > 0 ? (
-        <View style={styles.pinnedGrid}>
-          {pinnedItems.map((item, index) => (
-            <TouchableOpacity key={`${item.entityType}-${item.entityId}-${index}`} style={styles.pinnedItem} onPress={() => openItem(item)} activeOpacity={0.86}>
+        <View style={styles.pinnedEditorialGrid}>
+          {primaryPinned ? (
+            <TouchableOpacity style={styles.pinnedHeroItem} onPress={() => openItem(primaryPinned)} activeOpacity={0.88}>
+              {primaryPinned.image ? <Image source={{ uri: primaryPinned.image }} style={styles.pinnedImage} contentFit="cover" /> : <View style={styles.pinnedImage} />}
+              <View style={styles.pinnedOverlay} />
+              <Text style={styles.pinnedRank}>#1</Text>
+              <View style={styles.pinnedHeroCopy}>
+                <Text style={styles.pinnedHeroLabel}>{primaryPinned.entityType}</Text>
+                <Text style={styles.pinnedHeroName} numberOfLines={2}>{primaryPinned.name || primaryPinned.entityId}</Text>
+              </View>
+            </TouchableOpacity>
+          ) : null}
+          <View style={styles.pinnedSideStack}>
+          {secondaryPinned.map((item, index) => (
+            <TouchableOpacity key={`${item.entityType}-${item.entityId}-${index}`} style={styles.pinnedSideItem} onPress={() => openItem(item)} activeOpacity={0.86}>
               {item.image ? <Image source={{ uri: item.image }} style={styles.pinnedImage} contentFit="cover" /> : <View style={styles.pinnedImage} />}
-              <Text style={styles.pinnedRank}>#{index + 1}</Text>
+              <View style={styles.pinnedOverlay} />
+              <Text style={styles.pinnedRank}>#{index + 2}</Text>
+              <Text style={styles.pinnedSideName} numberOfLines={1}>{item.name || item.entityId}</Text>
             </TouchableOpacity>
           ))}
+          </View>
         </View>
       ) : (
         <View style={styles.wallEmptyState}>
@@ -226,7 +267,7 @@ export const TasteWallSection = React.memo(function TasteWallSection({ styles, d
 
       {recentFavorites.length > 0 && (
         <View style={styles.recentWallList}>
-          <Text style={styles.recentWallTitle}>Music Wall</Text>
+          <Text style={styles.recentWallTitle}>Diary Feed</Text>
           {recentFavorites.map((item, index) => (
             <TouchableOpacity key={`${item.entityType}-${item.entityId}-${index}`} style={styles.recentWallItem} onPress={() => openItem(item)} activeOpacity={0.86}>
               <View style={styles.wallAvatarMark}>

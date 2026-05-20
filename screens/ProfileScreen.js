@@ -29,6 +29,7 @@ import { openSpotifyUrl } from '../utils/externalLinks';
 import { waitForSpotifySyncJob } from '../utils/spotifySync';
 import {
   BadgesSection,
+  CollapsibleProfileSection,
   FavoriteCarouselSection,
   FollowingSection,
   ProfileShareCard,
@@ -60,6 +61,13 @@ export default function ProfileScreen({ navigation }) {
   const spotifySyncStarted = useRef(false);
   const [shouldRenderProfileShare, setShouldRenderProfileShare] = useState(false);
   const [shouldRenderTop3Share, setShouldRenderTop3Share] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState({
+    albums: false,
+    artists: false,
+    songs: true,
+    badges: false,
+    following: true,
+  });
 
   const {
     data: mobileProfile,
@@ -130,6 +138,10 @@ export default function ProfileScreen({ navigation }) {
 
   const followingUsers = useMemo(() => mobileProfile?.followingUsers || [], [mobileProfile?.followingUsers]);
   const isLoadingFollowing = isLoadingProfile && followingIds.length > 0;
+
+  const toggleSection = useCallback((section) => {
+    setCollapsedSections((current) => ({ ...current, [section]: !current[section] }));
+  }, []);
 
   const { albums: favoriteAlbums, songs: favoriteSongs, artists: favoriteArtists } = useMemo(
     () => splitFavorites(favorites),
@@ -394,26 +406,44 @@ export default function ProfileScreen({ navigation }) {
       </TouchableOpacity>
 
       <FavoriteCarouselSection
-        title="My Favorite Albums"
+        title="Favorite Albums"
+        subtitle="Long plays on your shelf"
+        count={favoriteAlbums.length}
         styles={styles}
-        titleStyle={styles.albumsTitle}
         data={favoriteAlbums}
         isLoading={isLoadingFavorites}
         renderItem={renderAlbumItem}
+        collapsed={collapsedSections.albums}
+        onToggle={() => toggleSection('albums')}
       />
 
       <FavoriteCarouselSection
-        title="My Favorite Artists"
+        title="Favorite Artists"
+        subtitle="Voices shaping your taste"
+        count={favoriteArtists.length}
         styles={styles}
-        titleStyle={styles.artistsTitle}
         data={favoriteArtists}
         isLoading={isLoadingFavorites}
         renderItem={renderArtistItem}
+        collapsed={collapsedSections.artists}
+        onToggle={() => toggleSection('artists')}
       />
 
-      <Text style={styles.songsTitle}>My Favorite Songs</Text>
+      <CollapsibleProfileSection
+        styles={styles}
+        title="Favorite Songs"
+        subtitle="Tracks in rotation"
+        count={favoriteSongs.length}
+        collapsed={collapsedSections.songs}
+        onToggle={() => toggleSection('songs')}
+      />
 
-      <BadgesSection styles={styles} badges={badges} />
+      <BadgesSection
+        styles={styles}
+        badges={badges}
+        collapsed={collapsedSections.badges}
+        onToggle={() => toggleSection('badges')}
+      />
 
       <TouchableOpacity
         style={styles.plusButton}
@@ -433,7 +463,7 @@ export default function ProfileScreen({ navigation }) {
         <Text style={styles.publicProfileText}>View Public Profile</Text>
       </TouchableOpacity>
     </>
-  ), [favoriteAlbums, favoriteArtists, isLoadingFavorites, profileImageSource, renderAlbumItem, renderArtistItem, setIsEditingUsername, user?.username, handlePickProfilePicture, isUploadingPicture, navigation, handleShareProfile, handleShareTop3, top3Items.length, currentlyPlaying?.is_playing, currentlyPlaying?.item?.cover_image, scrollY, badges, tasteWall]);
+  ), [favoriteAlbums, favoriteArtists, favoriteSongs.length, isLoadingFavorites, profileImageSource, renderAlbumItem, renderArtistItem, setIsEditingUsername, user?.username, handlePickProfilePicture, isUploadingPicture, navigation, handleShareProfile, handleShareTop3, top3Items.length, currentlyPlaying?.is_playing, currentlyPlaying?.item?.cover_image, scrollY, badges, tasteWall, collapsedSections.albums, collapsedSections.artists, collapsedSections.badges, collapsedSections.songs, toggleSection]);
 
   const followingSection = useMemo(() => (
     <FollowingSection
@@ -442,8 +472,10 @@ export default function ProfileScreen({ navigation }) {
       followingUsers={followingUsers}
       isLoading={isLoadingFollowing}
       renderItem={renderFollowingItem}
+      collapsed={collapsedSections.following}
+      onToggle={() => toggleSection('following')}
     />
-  ), [followingIds.length, followingUsers, isLoadingFollowing, renderFollowingItem]);
+  ), [collapsedSections.following, followingIds.length, followingUsers, isLoadingFollowing, renderFollowingItem, toggleSection]);
 
   if (isLoading || isRefreshingUser) {
     return <LoadingScreen />;
@@ -527,7 +559,7 @@ export default function ProfileScreen({ navigation }) {
 
           <Animated.FlatList
             ListHeaderComponent={listHeader}
-            data={isLoadingFavorites ? [] : favoriteSongs}
+            data={isLoadingFavorites || collapsedSections.songs ? [] : favoriteSongs}
             renderItem={renderSongItem}
             keyExtractor={(item) => item.entityId}
             contentContainerStyle={styles.listContainer}
@@ -543,7 +575,7 @@ export default function ProfileScreen({ navigation }) {
             )}
             ListFooterComponent={
               <>
-              {isLoadingFavorites ? <SkeletonList count={3} itemStyle={styles.songSkeletonItem} /> : null}
+              {isLoadingFavorites && !collapsedSections.songs ? <SkeletonList count={3} itemStyle={styles.songSkeletonItem} /> : null}
               {followingSection}
               </>
             }
@@ -888,15 +920,79 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
   },
+  profileSectionCard: {
+    marginHorizontal: 15,
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 24,
+    backgroundColor: 'rgba(32,27,39,0.76)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+  },
+  profileSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  profileSectionTitleWrap: {
+    flex: 1,
+  },
+  profileSectionKickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  profileSectionKicker: {
+    color: '#AFA7B7',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+  },
+  profileSectionCount: {
+    color: '#171515',
+    fontSize: 10,
+    fontWeight: '900',
+    backgroundColor: '#F4E7C5',
+    borderRadius: 99,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    overflow: 'hidden',
+  },
+  profileSectionTitle: {
+    color: '#FFF',
+    fontSize: 21,
+    fontWeight: '900',
+    marginTop: 4,
+  },
+  profileSectionChevron: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(244,231,197,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   tasteWallCard: {
     marginHorizontal: 15,
     marginTop: 16,
     padding: 18,
-    borderRadius: 30,
-    backgroundColor: '#211C29',
+    borderRadius: 34,
+    backgroundColor: '#211B2A',
     borderWidth: 1,
-    borderColor: 'rgba(244,231,197,0.12)',
+    borderColor: 'rgba(244,231,197,0.16)',
     overflow: 'hidden',
+  },
+  tasteWallAura: {
+    position: 'absolute',
+    right: -70,
+    top: -60,
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    backgroundColor: 'rgba(187,167,255,0.18)',
   },
   tasteWallHeader: {
     flexDirection: 'row',
@@ -913,9 +1009,16 @@ const styles = StyleSheet.create({
   },
   tasteWallTitle: {
     color: '#FFF',
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '900',
     marginTop: 4,
+  },
+  tasteWallSubtitle: {
+    color: '#CFC5D8',
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 7,
+    maxWidth: 230,
   },
   tasteWallStamp: {
     minWidth: 64,
@@ -941,11 +1044,21 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 16,
   },
+  tasteSignalRow: {
+    flexDirection: 'row',
+    gap: 9,
+    marginTop: 18,
+  },
   tasteDnaPill: {
     flex: 1,
-    padding: 12,
+    padding: 11,
     borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  tasteSignalPillPrimary: {
+    backgroundColor: 'rgba(244,231,197,0.11)',
+    borderWidth: 1,
+    borderColor: 'rgba(244,231,197,0.16)',
   },
   tasteDnaValue: {
     color: '#FFF',
@@ -964,6 +1077,28 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 16,
   },
+  pinnedEditorialGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
+  pinnedHeroItem: {
+    flex: 1.45,
+    height: 214,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  pinnedSideStack: {
+    flex: 1,
+    gap: 10,
+  },
+  pinnedSideItem: {
+    height: 102,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
   pinnedItem: {
     flex: 1,
     aspectRatio: 0.78,
@@ -974,6 +1109,10 @@ const styles = StyleSheet.create({
   pinnedImage: {
     width: '100%',
     height: '100%',
+  },
+  pinnedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.22)',
   },
   pinnedRank: {
     position: 'absolute',
@@ -986,6 +1125,41 @@ const styles = StyleSheet.create({
     borderRadius: 99,
     paddingHorizontal: 8,
     paddingVertical: 4,
+  },
+  pinnedHeroCopy: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 12,
+  },
+  pinnedHeroLabel: {
+    alignSelf: 'flex-start',
+    color: '#171515',
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    backgroundColor: '#BBA7FF',
+    borderRadius: 99,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    overflow: 'hidden',
+  },
+  pinnedHeroName: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '900',
+    marginTop: 7,
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowRadius: 8,
+  },
+  pinnedSideName: {
+    position: 'absolute',
+    left: 10,
+    right: 10,
+    bottom: 9,
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '900',
   },
   wallEmptyState: {
     marginTop: 16,
