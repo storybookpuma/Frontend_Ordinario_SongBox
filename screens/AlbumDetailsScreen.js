@@ -196,6 +196,7 @@ const AlbumDetailsScreen = ({ route, navigation: navigationProp }) => {
   }
 
   const displayedRatingDistribution = distributionWithUserFallback(ratingDistribution, userRating);
+  const trackCount = albumData.tracks?.length || 0;
 
   return (
     <View style={styles.container} collapsable={false}>
@@ -292,7 +293,16 @@ const AlbumDetailsScreen = ({ route, navigation: navigationProp }) => {
 
         {/* Tracks */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Tracks</Text>
+          <View style={styles.tracklistHeader}>
+            <View>
+              <Text style={styles.cardTitle}>Tracklist</Text>
+              <Text style={styles.tracklistSubtitle}>{trackCount} {trackCount === 1 ? 'track' : 'tracks'} archived</Text>
+            </View>
+            <View style={styles.tracklistBadge}>
+              <Icon name="music" size={12} color="#171515" />
+            </View>
+          </View>
+          {trackCount > 0 ? (
           <View style={styles.tracksList}>
             {albumData.tracks.map((track, index) => (
               <TouchableOpacity
@@ -301,19 +311,29 @@ const AlbumDetailsScreen = ({ route, navigation: navigationProp }) => {
                   styles.trackRow,
                   index !== albumData.tracks.length - 1 && styles.trackRowBorder,
                 ]}
+                activeOpacity={0.82}
                 onPress={() => navigation.navigate('SongDetailsScreen', { songId: track.id })}
               >
-                <Text style={styles.trackNumber}>{track.track_number}</Text>
+                <View style={styles.trackNumberWrap}>
+                  <Text style={styles.trackNumber}>{track.track_number}</Text>
+                </View>
                 <View style={styles.trackInfo}>
                   <Text style={styles.trackName} numberOfLines={1}>{track.name}</Text>
                   <Text style={styles.trackArtists} numberOfLines={1}>
-                    {track.artists?.join(', ') || albumData.artists.join(', ')}
+                    {track.disc_number > 1 ? `Disc ${track.disc_number} · ` : ''}{track.artists?.join(', ') || albumData.artists.join(', ')}
                   </Text>
                 </View>
                 <Text style={styles.trackDuration}>{formatDuration(track.duration_ms)}</Text>
               </TouchableOpacity>
             ))}
           </View>
+          ) : (
+            <View style={styles.emptyTrackState}>
+              <Icon name="music" size={22} color="#F4E7C5" />
+              <Text style={styles.emptyTrackTitle}>Tracklist unavailable</Text>
+              <Text style={styles.emptyTrackText}>We’ll fill this in when Spotify metadata is available.</Text>
+            </View>
+          )}
         </View>
 
         {/* Comments */}
@@ -561,22 +581,50 @@ const styles = StyleSheet.create({
   tracksList: {
     gap: 0,
   },
+  tracklistHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  tracklistSubtitle: {
+    color: '#AFA7B7',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: -6,
+  },
+  tracklistBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#F4E7C5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   trackRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 13,
     gap: 12,
   },
   trackRowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.08)',
   },
+  trackNumberWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   trackNumber: {
-    width: 28,
     fontSize: 14,
-    color: '#888',
-    fontWeight: '600',
+    color: '#F4E7C5',
+    fontWeight: '800',
     textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
   trackInfo: {
     flex: 1,
@@ -594,6 +642,25 @@ const styles = StyleSheet.create({
   trackDuration: {
     fontSize: 13,
     color: '#888',
+    fontVariant: ['tabular-nums'],
+  },
+  emptyTrackState: {
+    padding: 18,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    alignItems: 'center',
+    gap: 7,
+  },
+  emptyTrackTitle: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  emptyTrackText: {
+    color: '#AFA7B7',
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 17,
   },
 
 });

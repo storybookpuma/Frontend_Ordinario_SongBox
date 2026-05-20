@@ -1,4 +1,4 @@
-import React, { useEffect, useContext, useRef } from 'react';
+import React, { useEffect, useContext, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -31,15 +31,20 @@ import { applyRatingDistributionChange, distributionWithUserFallback, hasRatingD
 const HEADER_MAX = 340;
 
 function ArtistReleaseSection({ title, releases, navigation, showToast }) {
+  const [expanded, setExpanded] = useState(false);
   if (!releases || releases.length === 0) return null;
+  const visibleReleases = expanded ? releases : releases.slice(0, 8);
   return (
     <View style={styles.card}>
       <View style={styles.releaseHeaderRow}>
-        <Text style={styles.cardTitle}>{title}</Text>
+        <View>
+          <Text style={styles.cardTitle}>{title}</Text>
+          <Text style={styles.releaseSubtitle}>{title === 'Albums' ? 'Full-length projects' : 'Singles, EPs, and shorter releases'}</Text>
+        </View>
         <Text style={styles.releaseCount}>{releases.length}</Text>
       </View>
       <View style={styles.albumsGrid}>
-        {releases.map((album, index) => (
+        {visibleReleases.map((album, index) => (
           <TouchableOpacity
             key={album.id || `${title}-${index}`}
             style={[
@@ -66,10 +71,16 @@ function ArtistReleaseSection({ title, releases, navigation, showToast }) {
               transition={180}
             />
             <Text style={styles.albumName} numberOfLines={2}>{album.title || album.name}</Text>
-            <Text style={styles.albumYear}>{album.release_date}</Text>
+            <Text style={styles.albumYear}>{album.release_date}{album.total_tracks ? ` · ${album.total_tracks} tracks` : ''}</Text>
           </TouchableOpacity>
         ))}
       </View>
+      {releases.length > 8 ? (
+        <TouchableOpacity style={styles.showMoreReleasesButton} onPress={() => setExpanded((current) => !current)} activeOpacity={0.84}>
+          <Text style={styles.showMoreReleasesText}>{expanded ? 'Show less' : `Show ${releases.length - 8} more`}</Text>
+          <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={12} color="#F4E7C5" />
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -547,6 +558,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 14,
   },
+  releaseSubtitle: {
+    color: '#AFA7B7',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: -8,
+    marginBottom: 2,
+  },
   releaseCount: {
     color: '#F4E7C5',
     fontSize: 13,
@@ -652,6 +670,24 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#888',
     marginTop: 2,
+    textAlign: 'center',
+  },
+  showMoreReleasesButton: {
+    marginTop: 16,
+    paddingVertical: 11,
+    borderRadius: 18,
+    backgroundColor: 'rgba(244,231,197,0.09)',
+    borderWidth: 1,
+    borderColor: 'rgba(244,231,197,0.14)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  showMoreReleasesText: {
+    color: '#F4E7C5',
+    fontSize: 13,
+    fontWeight: '900',
   },
 
 });

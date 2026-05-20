@@ -399,6 +399,7 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
   return (
     <>
       <TouchableOpacity style={styles.discussionButton} onPress={openModal} activeOpacity={0.8}>
+        <View style={styles.discussionGlow} />
         <View style={styles.discussionIconWrap}>
           <Icon name="comments" size={16} color="#F4E7C5" />
         </View>
@@ -408,7 +409,10 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
             {count > 0 ? `${count} ${count === 1 ? 'reseña' : 'reseñas'}` : 'Sin reseñas aún'}
           </Text>
         </View>
-        <Icon name="chevron-up" size={14} color="#A071CA" />
+        <View style={styles.discussionOpenPill}>
+          <Text style={styles.discussionOpenText}>Open</Text>
+          <Icon name="chevron-up" size={11} color="#171515" />
+        </View>
       </TouchableOpacity>
 
       <Modal visible={modalVisible} transparent animationType="none" onRequestClose={closeModal}>
@@ -417,7 +421,10 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
           <Animated.View style={[styles.sheet, keyboardHeight > 0 && { paddingBottom: 0 }, { transform: [{ translateY: slideAnim }] }]}>
             <View style={styles.handleBar} />
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Reseñas</Text>
+              <View>
+                <Text style={styles.sheetKicker}>{count} {count === 1 ? 'review' : 'reviews'}</Text>
+                <Text style={styles.sheetTitle}>Reseñas</Text>
+              </View>
               <TouchableOpacity onPress={closeModal} hitSlop={12}>
                 <Icon name="times" size={18} color="#A9A0B8" />
               </TouchableOpacity>
@@ -433,8 +440,8 @@ const CommentSection = forwardRef(function CommentSection({ entityType, entityId
               shouldHideEmptyState ? <View style={styles.emptyKeyboardSpacer} /> : (
               <View style={styles.emptyState}>
                 <Icon name="comment-o" size={28} color="#F4E7C5" />
-                <Text style={styles.emptyTitle}>Sin reseñas aún</Text>
-                <Text style={styles.emptySub}>Sé el primero en compartir tu opinión.</Text>
+                <Text style={styles.emptyTitle}>Start the conversation</Text>
+                <Text style={styles.emptySub}>Drop a quick take, a memory, or why this one matters.</Text>
               </View>
               )
             ) : (
@@ -568,10 +575,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 18,
     borderRadius: 26,
-    backgroundColor: 'rgba(160,113,202,0.1)',
+    backgroundColor: 'rgba(32,27,39,0.86)',
     borderWidth: 1,
-    borderColor: 'rgba(160,113,202,0.2)',
+    borderColor: 'rgba(244,231,197,0.15)',
     gap: 14,
+    overflow: 'hidden',
+  },
+  discussionGlow: {
+    position: 'absolute',
+    right: -30,
+    top: -40,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(160,113,202,0.18)',
   },
   discussionIconWrap: {
     width: 44,
@@ -593,6 +610,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#A9A0B8',
     marginTop: 2,
+  },
+  discussionOpenPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 99,
+    backgroundColor: '#F4E7C5',
+  },
+  discussionOpenText: {
+    color: '#171515',
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
   },
   overlay: {
     flex: 1,
@@ -635,6 +667,14 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '800',
     color: '#FFF',
+  },
+  sheetKicker: {
+    color: '#F4E7C5',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 2,
   },
   listContent: {
     paddingHorizontal: 20,

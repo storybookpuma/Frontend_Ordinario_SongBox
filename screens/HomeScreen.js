@@ -111,6 +111,23 @@ const applyHomeFeedToSections = (feed, setters) => {
   setters.setActivityData(feed.activity || feed.activityData || []);
 };
 
+const SectionHeader = ({ eyebrow, title, count, actionLabel, onAction }) => (
+  <View style={styles.sectionHeader}>
+    <View style={styles.sectionHeaderCopy}>
+      {eyebrow ? <Text style={styles.sectionEyebrow}>{eyebrow}</Text> : null}
+      <Text style={styles.sectionTitle}>{title}</Text>
+    </View>
+    <View style={styles.sectionHeaderMeta}>
+      {typeof count === 'number' ? <Text style={styles.sectionCount}>{count}</Text> : null}
+      {actionLabel ? (
+        <TouchableOpacity onPress={onAction} activeOpacity={0.8}>
+          <Text style={styles.sectionAction}>{actionLabel}</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  </View>
+);
+
 export default function HomeScreen({ navigation }) {
   const { axiosInstance, isLoading: isAuthLoading, user } = useContext(AuthContext);
   const { showToast } = useToast();
@@ -315,9 +332,9 @@ export default function HomeScreen({ navigation }) {
     </ScrollView>
   );
 
-  const renderHorizontalSection = (title, data, renderItem, emptyText) => (
+  const renderHorizontalSection = (title, data, renderItem, emptyText, eyebrow) => (
     <View style={styles.extraSection}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <SectionHeader eyebrow={eyebrow} title={title} count={data.length} />
       {homeFeedQuery.isFetching && data.length === 0 ? (
         renderCardSkeletonRow()
       ) : data.length > 0 ? (
@@ -381,7 +398,18 @@ export default function HomeScreen({ navigation }) {
           />
         </Animated.View>
 
-        {/* Carrusel de arriba (Datos Estáticos) */}
+        {homeFeedQuery.data?.isStaleFallback ? (
+          <View style={styles.cacheNotice}>
+            <Text style={styles.cacheNoticeTitle}>Showing your saved feed</Text>
+            <Text style={styles.cacheNoticeText}>Pull to refresh when your connection is back.</Text>
+          </View>
+        ) : null}
+
+        <View style={styles.homeHeroIntro}>
+          <Text style={styles.homeHeroKicker}>SongBox Today</Text>
+          <Text style={styles.homeHeroTitle}>New sounds, recent plays, and your community pulse.</Text>
+        </View>
+
         <ScrollView
           horizontal
           ref={carouselRef}
@@ -469,7 +497,7 @@ export default function HomeScreen({ navigation }) {
 
         {/* Escuchado Recientemente */}
         <View style={styles.recentlyListenedContainer}>
-          <Text style={styles.sectionTitle}>Recently Listened</Text>
+          <SectionHeader eyebrow="Your rotation" title="Recently Listened" count={recentlyListenedData.length} />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentlyListenedScrollContent}>
             {homeFeedQuery.isFetching && recentlyListenedData.length === 0 ? Array.from({ length: 4 }).map((_, index) => (
               <SkeletonCard key={index} style={[styles.songCard, { width: recentlyListenedCardWidth }]} imageStyle={styles.songImage} />
@@ -498,14 +526,14 @@ export default function HomeScreen({ navigation }) {
           </ScrollView>
         </View>
 
-        {renderHorizontalSection('New Releases', newsData, renderAlbumCard, 'No hay lanzamientos nuevos disponibles.')}
-        {renderHorizontalSection('Trending Artists', artistsData, renderArtistCard, 'No hay artistas disponibles.')}
-        {renderHorizontalSection('More Releases', moreAlbumsData, renderAlbumCard, 'Haz pull-to-refresh para intentar cargar más álbumes.')}
-        {renderHorizontalSection('More Artists', moreArtistsData, renderArtistCard, 'Haz pull-to-refresh para intentar cargar más artistas.')}
+        {renderHorizontalSection('New Releases', newsData, renderAlbumCard, 'No hay lanzamientos nuevos disponibles.', 'Fresh shelf')}
+        {renderHorizontalSection('Trending Artists', artistsData, renderArtistCard, 'No hay artistas disponibles.', 'Discovery lane')}
+        {renderHorizontalSection('More Releases', moreAlbumsData, renderAlbumCard, 'Haz pull-to-refresh para intentar cargar más álbumes.', 'Keep digging')}
+        {renderHorizontalSection('More Artists', moreArtistsData, renderArtistCard, 'Haz pull-to-refresh para intentar cargar más artistas.', 'More voices')}
 
         {/* Top Rated Charts */}
         <View style={styles.extraSection}>
-          <Text style={styles.sectionTitle}>Top Rated</Text>
+          <SectionHeader eyebrow="SongBox charts" title="Top Rated" count={topRatedData.length} actionLabel="Charts" onAction={() => navigation.navigate('ChartsScreen')} />
           {homeFeedQuery.isFetching && topRatedData.length === 0 ? (
             renderCardSkeletonRow()
           ) : topRatedData.length > 0 ? (
@@ -542,14 +570,11 @@ export default function HomeScreen({ navigation }) {
           ) : (
             <Text style={styles.emptySectionText}>No hay calificaciones aún.</Text>
           )}
-          <TouchableOpacity style={styles.seeMoreButton} onPress={() => navigation.navigate('ChartsScreen')}>
-            <Text style={styles.seeMoreText}>See all charts →</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Activity Feed */}
         <View style={styles.extraSection}>
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
+          <SectionHeader eyebrow="Community" title="Recent Activity" count={activityData.length} actionLabel="Activity" onAction={() => navigation.navigate('ActivityScreen')} />
           {homeFeedQuery.isFetching && activityData.length === 0 ? (
             <SkeletonList count={3} itemStyle={styles.activitySkeletonItem} />
           ) : activityData.length > 0 ? (
@@ -610,9 +635,6 @@ export default function HomeScreen({ navigation }) {
           ) : (
             <Text style={styles.emptySectionText}>No hay actividad reciente.</Text>
           )}
-          <TouchableOpacity style={styles.seeMoreButton} onPress={() => navigation.navigate('ActivityScreen')}>
-            <Text style={styles.seeMoreText}>See all activity →</Text>
-          </TouchableOpacity>
         </View>
       </Animated.ScrollView>
     </SafeAreaView>
@@ -646,6 +668,44 @@ const styles = StyleSheet.create({
   logo: {
     width: 50,
     height: 50
+  },
+  cacheNotice: {
+    marginHorizontal: 20,
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 20,
+    backgroundColor: 'rgba(244,231,197,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(244,231,197,0.16)',
+  },
+  cacheNoticeTitle: {
+    color: '#F4E7C5',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  cacheNoticeText: {
+    color: '#CFC5D8',
+    fontSize: 12,
+    marginTop: 3,
+  },
+  homeHeroIntro: {
+    paddingHorizontal: 22,
+    marginTop: 4,
+    marginBottom: 14,
+  },
+  homeHeroKicker: {
+    color: '#F4E7C5',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  homeHeroTitle: {
+    color: '#FFF',
+    fontSize: 26,
+    fontWeight: '900',
+    lineHeight: 31,
+    marginTop: 5,
   },
 
   carouselContainer: {
@@ -755,12 +815,49 @@ const styles = StyleSheet.create({
     fontSize: 12,
     opacity: 0.7
   },
+  sectionHeader: {
+    paddingHorizontal: 20,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  sectionHeaderCopy: {
+    flex: 1,
+  },
+  sectionEyebrow: {
+    color: '#A071CA',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 3,
+  },
   sectionTitle: {
     color: '#FFF',
     fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 10,
-    paddingHorizontal: 20,
+  },
+  sectionHeaderMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sectionCount: {
+    color: '#171515',
+    backgroundColor: '#F4E7C5',
+    borderRadius: 99,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    fontSize: 11,
+    fontWeight: '900',
+    overflow: 'hidden',
+  },
+  sectionAction: {
+    color: '#F4E7C5',
+    fontSize: 12,
+    fontWeight: '900',
   },
   recentlyListenedContainer: { 
     marginVertical: 14,
